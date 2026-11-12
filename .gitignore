@@ -22,7 +22,7 @@ obj/
 
 build/
 builds/
-release/
+/release/
 steam-build/
 *.pck
 *.zip
@@ -34,3 +34,4 @@ steam-build/
 *.suo
 .DS_Store
 Thumbs.db
+
