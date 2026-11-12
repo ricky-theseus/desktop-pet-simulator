@@ -5,9 +5,8 @@
 先阅读：
 
 - AGENTS.md
-- docs/architecture/core-mod-skill.md
-- docs/development/repository-structure.md
-- docs/development/mod-authoring.md
+- README.md
+- 通过维护者获取当前设计资料
 
 如果修改公共 API、manifest、事件或权限模型，先提交设计说明，再开始实现。
 
@@ -17,7 +16,7 @@
 - sdk：schema、CLI、SDK、模板和测试夹具。
 - mod：官方 Mod 或 Mod 示例。
 - skill：Agent 开发 Skill 和参考资料。
-- docs：架构、开发和发布文档。
+- 文档：仅提交已经确认可以公开的接口和开发入口文档。
 - build：构建、CI 或仓库维护。
 
 ## Pull Request 要求

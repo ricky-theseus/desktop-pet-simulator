@@ -42,7 +42,7 @@ Skills
 - sdk/：Mod schema、SDK、CLI、测试夹具和模板。
 - mods/official/：随产品维护的官方 Mod。
 - skills/：给 Agent 使用的 Mod 开发 Skill。
-- docs/：架构、API、开发、兼容和发布文档。
+- 公开接口和开发入口文档：仅在确认适合公开后加入。
 - examples/：可运行或最小化的 Mod 示例。
 - tests/：契约、集成、兼容和回放测试。
 - tools/：开发期工具。
@@ -52,9 +52,11 @@ Skills
 
 1. AGENTS.md
 2. CONTRIBUTING.md
-3. docs/architecture/core-mod-skill.md
-4. docs/development/repository-structure.md
-5. docs/development/mod-authoring.md
+3. 通过维护者获取当前设计资料和架构决策
+
+## 设计资料
+
+产品设计、架构设计和实施计划不随公共仓库分发，保存在本地设计资料目录和受控文档中。公共仓库只保留实现所需的治理规则、接口说明和开发入口。
 
 ## 许可证
 
