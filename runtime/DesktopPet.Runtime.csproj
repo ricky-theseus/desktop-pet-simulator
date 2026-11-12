@@ -1,0 +1,12 @@
+<Project Sdk="Godot.NET.Sdk/4.4.1">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\core\DesktopPet.Core\DesktopPet.Core.csproj" />
+    <ProjectReference Include="..\mods\official\mushroom\DesktopPet.OfficialMushroom.csproj" />
+  </ItemGroup>
+</Project>

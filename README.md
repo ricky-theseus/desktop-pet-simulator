@@ -9,9 +9,7 @@ Core 只保留宠物运行时和平台最小基础设施；外观、性格、玩
 
 ## 当前状态
 
-仓库目前处于初始化阶段，包含 Core / SDK / Mod / Skill 的目录边界、仓库开发规范、官方史莱姆 Mod 占位目录、Agent Mod 开发 Skill 占位结构，以及后续实现所需的文档、测试和工具入口。
-
-当前尚未提供可运行的游戏版本，也尚未冻结具体引擎、语言、Mod 包格式或开源许可证。
+仓库目前处于第一阶段实现，包含 Core / SDK / Mod / Skill 的目录边界、仓库开发规范、官方蘑菇 Mod、Agent Mod 开发 Skill 占位结构，以及 Core 契约测试入口。当前桌面渲染工程正在接入 Godot 4 .NET。
 
 ## 核心关系
 
@@ -24,7 +22,7 @@ Core Runtime
 └── SDK / CLI 契约
 
 Official Mods
-├── official-slime
+├── official-mushroom
 ├── official-agent-bridge
 ├── official-desktop-interaction
 ├── official-ui-shell
@@ -59,5 +57,7 @@ Skills
 产品设计、架构设计和实施计划不随公共仓库分发，保存在本地设计资料目录和受控文档中。公共仓库只保留实现所需的治理规则、接口说明和开发入口。
 
 ## 许可证
+
+当前技术路线：Godot 4 .NET / C# 负责桌面渲染和运行时宿主，Core 以 .NET 8 公共契约连接 Mod，Windows 和 macOS 系统能力通过平台适配器实现。
 
 许可证尚未冻结。许可证确定前，仓库内容不应被宣传为已授予再分发权的正式开源发行版。

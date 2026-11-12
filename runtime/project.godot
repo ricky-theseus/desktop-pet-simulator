@@ -1,0 +1,32 @@
+; Desktop Pet Simulator Godot runtime
+; Rendering is kept in Godot while platform and Mod contracts stay in .NET.
+
+config_version=5
+
+[application]
+
+config/name="桌面宠物模拟器"
+run/main_scene="res://Main.tscn"
+
+[dotnet]
+
+project/assembly_name="DesktopPet.Runtime"
+
+[editor]
+
+run/main_run_args=""
+
+[display]
+
+window/size/viewport_width=640
+window/size/viewport_height=360
+window/size/window_width_override=640
+window/size/window_height_override=360
+window/stretch/mode="canvas_items"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+textures/canvas_textures/default_texture_filter=0
