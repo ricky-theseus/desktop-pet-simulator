@@ -3,6 +3,8 @@
 
 config_version=5
 
+config/features=PackedStringArray("4.5", "C#", "GL Compatibility")
+
 [application]
 
 config/name="桌面宠物模拟器"

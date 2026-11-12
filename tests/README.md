@@ -5,4 +5,4 @@
 - compatibility/：Core API 与 Mod 版本兼容。
 - fixtures/：可重复使用的最小 Mod、错误场景和回放数据。
 
-当前契约测试使用 .NET 8、xUnit 和 `dotnet test`；Godot 项目使用 Godot 4.4.1 Mono 进行无头加载校验。
+当前契约测试使用 .NET 8、xUnit 和 `dotnet test`；Godot 项目使用 Godot 4.5.1 Mono 进行无头加载校验。
