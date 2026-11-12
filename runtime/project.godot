@@ -20,10 +20,12 @@ run/main_run_args=""
 
 [display]
 
-window/size/viewport_width=640
-window/size/viewport_height=360
-window/size/window_width_override=640
-window/size/window_height_override=360
+window/size/viewport_width=192
+window/size/viewport_height=192
+window/size/window_width_override=192
+window/size/window_height_override=192
+window/size/transparent=true
+window/size/resizable=false
 window/stretch/mode="canvas_items"
 
 [rendering]
@@ -32,3 +34,4 @@ renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/default_filters/use_nearest_mipmap_filter=false
 textures/canvas_textures/default_texture_filter=0
+environment/defaults/default_clear_color=Color(0, 0, 0, 0)

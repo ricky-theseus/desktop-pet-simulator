@@ -6,18 +6,35 @@ namespace DesktopPet.Runtime;
 
 public partial class Main : Node2D
 {
+    private MushroomPet? pet;
+
     public override void _Ready()
     {
+        DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.Borderless, true);
+        DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.AlwaysOnTop, true);
+
         var host = new ModHost(new ModHostOptions("1.0"));
         var mushroom = new MushroomMod();
         host.Register(mushroom);
         host.StartAll();
 
-        var title = new Label
+        pet = new MushroomPet();
+        AddChild(pet);
+    }
+
+    public override void _UnhandledInput(InputEvent inputEvent)
+    {
+        if (inputEvent is not InputEventMouseButton mouseButton ||
+            mouseButton.ButtonIndex != MouseButton.Left ||
+            !mouseButton.Pressed ||
+            pet is null ||
+            !pet.InteractionRect.HasPoint(mouseButton.Position))
         {
-            Text = $"{mushroom.PetDefinition.DisplayName} · Desktop Pet Simulator",
-            Position = new Vector2(24, 24)
-        };
-        AddChild(title);
+            return;
+        }
+
+        pet.State.Interact();
+        DisplayServer.WindowStartDrag();
+        GetViewport().SetInputAsHandled();
     }
 }
