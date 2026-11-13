@@ -19,6 +19,7 @@ obj/
 .godot/
 .export/
 .import/
+*.import
 
 build/
 builds/
