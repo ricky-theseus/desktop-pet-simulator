@@ -5,61 +5,46 @@ namespace DesktopPet.Runtime;
 
 public partial class MushroomPet : Node2D
 {
-    private static readonly Color Outline = new("#302339");
-    private static readonly Color Cap = new("#d94b68");
-    private static readonly Color CapLight = new("#f47d77");
-    private static readonly Color Stem = new("#f6d49b");
-    private static readonly Color StemShadow = new("#d99b72");
-    private static readonly Color Eye = new("#302339");
+    private static readonly Color Shadow = new("#302339");
+    private Sprite2D? sprite;
 
     public MushroomPetState State { get; } = new();
 
-    public Rect2 InteractionRect => new(24f, 28f, 144f, 140f);
+    public Rect2 InteractionRect => new(18f, 16f, 156f, 160f);
+
+    public override void _Ready()
+    {
+        var texture = GD.Load<Texture2D>("res://assets/mushroom/mushroom-idle.png");
+        if (texture is null)
+        {
+            GD.PushError("The official mushroom sprite could not be loaded.");
+            return;
+        }
+
+        sprite = new Sprite2D
+        {
+            Texture = texture,
+            Position = new Vector2(96f, 88f),
+            Scale = new Vector2(0.14f, 0.14f),
+            TextureFilter = CanvasItem.TextureFilterEnum.Nearest
+        };
+        AddChild(sprite);
+    }
 
     public override void _Process(double delta)
     {
         State.Tick((float)delta);
+        if (sprite is not null)
+        {
+            var bob = Mathf.Round(Mathf.Sin(State.IdleTime * 3.2f) * 2f - State.BounceEnergy * 3f);
+            sprite.Position = new Vector2(96f, 88f + bob);
+        }
+
         QueueRedraw();
     }
 
     public override void _Draw()
     {
-        var bob = Mathf.Round(Mathf.Sin(State.IdleTime * 3.2f) * 2f - State.BounceEnergy * 3f);
-
-        DrawRect(new Rect2(42f, 165f, 108f, 7f), new Color(Outline, 0.25f));
-        DrawMushroom(new Vector2(0f, bob));
-    }
-
-    private void DrawMushroom(Vector2 offset)
-    {
-        DrawPixelRect(new Rect2(60f, 92f, 72f, 58f), offset, Outline);
-        DrawPixelRect(new Rect2(68f, 100f, 56f, 50f), offset, Stem);
-        DrawPixelRect(new Rect2(68f, 128f, 12f, 22f), offset, StemShadow);
-        DrawPixelRect(new Rect2(80f, 140f, 44f, 10f), offset, StemShadow);
-        DrawPixelRect(new Rect2(56f, 146f, 80f, 10f), offset, Outline);
-        DrawPixelRect(new Rect2(64f, 146f, 64f, 6f), offset, Stem);
-
-        DrawPixelRect(new Rect2(40f, 48f, 112f, 8f), offset, Outline);
-        DrawPixelRect(new Rect2(32f, 56f, 128f, 40f), offset, Outline);
-        DrawPixelRect(new Rect2(40f, 96f, 112f, 8f), offset, Outline);
-        DrawPixelRect(new Rect2(48f, 40f, 96f, 8f), offset, Outline);
-        DrawPixelRect(new Rect2(64f, 32f, 64f, 8f), offset, Outline);
-
-        DrawPixelRect(new Rect2(48f, 48f, 96f, 8f), offset, CapLight);
-        DrawPixelRect(new Rect2(40f, 56f, 112f, 32f), offset, Cap);
-        DrawPixelRect(new Rect2(48f, 88f, 96f, 8f), offset, Cap);
-
-        DrawPixelRect(new Rect2(60f, 48f, 12f, 12f), offset, new Color("#fff0c2"));
-        DrawPixelRect(new Rect2(112f, 56f, 16f, 12f), offset, new Color("#fff0c2"));
-        DrawPixelRect(new Rect2(80f, 76f, 12f, 8f), offset, new Color("#fff0c2"));
-
-        DrawPixelRect(new Rect2(64f, 92f, 16f, 8f), offset, Eye);
-        DrawPixelRect(new Rect2(112f, 92f, 16f, 8f), offset, Eye);
-        DrawPixelRect(new Rect2(84f, 108f, 24f, 6f), offset, Eye);
-    }
-
-    private void DrawPixelRect(Rect2 rect, Vector2 offset, Color color)
-    {
-        DrawRect(new Rect2(rect.Position + offset, rect.Size), color);
+        DrawRect(new Rect2(42f, 165f, 108f, 7f), new Color(Shadow, 0.25f));
     }
 }

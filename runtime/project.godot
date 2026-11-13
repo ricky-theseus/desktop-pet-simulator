@@ -25,6 +25,9 @@ window/size/viewport_height=192
 window/size/window_width_override=192
 window/size/window_height_override=192
 window/size/transparent=true
+window/per_pixel_transparency/allowed=true
+window/size/borderless=true
+window/size/always_on_top=true
 window/size/resizable=false
 window/stretch/mode="canvas_items"
 
@@ -32,6 +35,7 @@ window/stretch/mode="canvas_items"
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+viewport/transparent_background=true
 textures/default_filters/use_nearest_mipmap_filter=false
 textures/canvas_textures/default_texture_filter=0
 environment/defaults/default_clear_color=Color(0, 0, 0, 0)
