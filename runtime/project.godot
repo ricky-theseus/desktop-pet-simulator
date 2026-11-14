@@ -14,6 +14,10 @@ config/name="桌面宠物模拟器"
 run/main_scene="res://Main.tscn"
 config/features=PackedStringArray("4.5", "C#", "GL Compatibility")
 
+[desktop_pet]
+
+appearance="res://assets/mushroom/appearance.json"
+
 [display]
 
 window/size/viewport_width=192

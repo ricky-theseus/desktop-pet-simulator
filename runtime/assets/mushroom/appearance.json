@@ -1,0 +1,17 @@
+{
+  "formatVersion": 1,
+  "id": "official-mushroom",
+  "displayName": "蘑菇",
+  "frameSize": 64,
+  "frames": [
+    "actions-v1/01.png", "actions-v1/02.png", "actions-v1/03.png", "actions-v1/04.png",
+    "actions-v1/05.png", "actions-v1/06.png", "actions-v1/07.png", "actions-v1/08.png"
+  ],
+  "actions": {
+    "idle": { "frames": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0], "fps": 6, "loop": true },
+    "pet": { "frames": [2,2,0,2,2,0], "fps": 8, "loop": false },
+    "eat": { "frames": [3,4,3,4,3,4,4,4], "fps": 5, "loop": false },
+    "held": { "frames": [5,6], "fps": 3, "loop": true },
+    "land": { "frames": [7,7,0], "fps": 8, "loop": false }
+  }
+}

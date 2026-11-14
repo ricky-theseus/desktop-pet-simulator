@@ -11,7 +11,14 @@ public partial class Main : Node2D
     private const int CenterAction = 3;
     private const int QuitAction = 4;
 
-    private MushroomPet? pet;
+    private PetView? pet;
+    private readonly MushroomPetState petState = new();
+    private ModHost? host;
+    private bool pointerDown;
+    private bool dragging;
+    private bool doubleClick;
+    private Vector2I pressScreen;
+    private Vector2I grabOffset;
     private PopupMenu? menu;
     private SpeechBubble? feedback;
     private float feedbackSeconds;
@@ -26,17 +33,25 @@ public partial class Main : Node2D
         DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.Borderless, true);
         DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.AlwaysOnTop, true);
 
-        var host = new ModHost(new ModHostOptions("1.0"));
+        if (OperatingSystem.IsWindows() && DisplayServer.GetName() != "headless" &&
+            !OS.GetCmdlineUserArgs().Contains("--show-taskbar"))
+        {
+            WindowsDesktopWindow.HideTaskbarButton((nint)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle));
+        }
+        GetWindow().FocusExited += CancelPointer;
+
+        host = new ModHost(new ModHostOptions("1.0"));
         var mushroom = new MushroomMod();
         host.Register(mushroom);
         host.StartAll();
 
-        pet = new MushroomPet { Position = PetOffset };
+        pet = new PetView { Position = PetOffset };
         AddChild(pet);
+        pet.LoadAppearance(ProjectSettings.GetSetting("desktop_pet/appearance", "res://assets/mushroom/appearance.json").AsString());
 
         menu = new PopupMenu { Theme = CreateMenuTheme() };
-        menu.AddItem("喂蘑菇", FeedAction);
-        menu.AddItem("摸摸蘑菇", PetAction);
+        menu.AddItem($"喂{pet.DisplayName}", FeedAction);
+        menu.AddItem($"摸摸{pet.DisplayName}", PetAction);
         menu.AddSeparator();
         menu.AddItem("回到屏幕中央", CenterAction);
         menu.AddItem("退出桌宠", QuitAction);
@@ -55,6 +70,7 @@ public partial class Main : Node2D
 
     public override void _Process(double delta)
     {
+        petState.Tick((float)delta);
         if (feedback is null || !feedback.Visible)
         {
             return;
@@ -70,14 +86,49 @@ public partial class Main : Node2D
 
     public override void _UnhandledInput(InputEvent inputEvent)
     {
-        if (inputEvent is not InputEventMouseButton mouseButton ||
-            !mouseButton.Pressed ||
-            pet is null ||
-            !pet.InteractionRect.HasPoint(mouseButton.Position - pet.Position))
+        if (pet is null) return;
+
+        if (inputEvent is InputEventMouseMotion motion && pointerDown)
         {
+            var pointer = DisplayServer.WindowGetPosition() + (Vector2I)motion.Position;
+            if (!dragging && ((Vector2)(pointer - pressScreen)).Length() >= 6f)
+            {
+                dragging = true;
+                pet.Play("held");
+                if (feedback is not null) feedback.Visible = false;
+                RefreshMousePassthrough();
+            }
+            if (dragging) DisplayServer.WindowSetPosition(pointer - grabOffset);
+            GetViewport().SetInputAsHandled();
             return;
         }
 
+        if (inputEvent is not InputEventMouseButton mouseButton) return;
+        if (mouseButton.ButtonIndex == MouseButton.Left && !mouseButton.Pressed && pointerDown)
+        {
+            if (dragging)
+            {
+                pet.Play("land");
+                var area = DisplayServer.ScreenGetUsableRect();
+                var size = DisplayServer.WindowGetSize();
+                var position = DisplayServer.WindowGetPosition();
+                DisplayServer.WindowSetPosition(new Vector2I(
+                    Math.Clamp(position.X, area.Position.X, Math.Max(area.Position.X, area.End.X - size.X)),
+                    Math.Clamp(position.Y, area.Position.Y, Math.Max(area.Position.Y, area.End.Y - size.Y))));
+            }
+            else if (pet.InteractionRect.HasPoint(mouseButton.Position - pet.Position))
+            {
+                petState.Interact();
+                pet.Play("pet");
+                ShowFeedback(doubleClick ? "超开心！" : "摸摸！");
+            }
+            pointerDown = false;
+            dragging = false;
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
+        if (!mouseButton.Pressed || !pet.InteractionRect.HasPoint(mouseButton.Position - pet.Position)) return;
         if (mouseButton.ButtonIndex == MouseButton.Right)
         {
             if (menu is not null)
@@ -96,10 +147,24 @@ public partial class Main : Node2D
             return;
         }
 
-        pet.State.Interact();
-        ShowFeedback(mouseButton.DoubleClick ? "蘑菇超开心！" : "摸摸！");
-        DisplayServer.WindowStartDrag();
+        pointerDown = true;
+        doubleClick = mouseButton.DoubleClick;
+        grabOffset = (Vector2I)mouseButton.Position;
+        pressScreen = DisplayServer.WindowGetPosition() + grabOffset;
         GetViewport().SetInputAsHandled();
+    }
+
+    private void CancelPointer()
+    {
+        if (dragging) pet?.Play("land");
+        pointerDown = false;
+        dragging = false;
+    }
+
+    public override void _ExitTree()
+    {
+        GetWindow().FocusExited -= CancelPointer;
+        host?.StopAll();
     }
 
     private void OnMenuItemPressed(long action)
@@ -112,11 +177,13 @@ public partial class Main : Node2D
         switch (action)
         {
             case FeedAction:
-                pet.State.Feed();
+                petState.Feed();
+                pet.Play("eat");
                 ShowFeedback("好吃！");
                 break;
             case PetAction:
-                pet.State.Interact();
+                petState.Interact();
+                pet.Play("pet");
                 ShowFeedback("摸摸！");
                 break;
             case CenterAction:
@@ -138,27 +205,8 @@ public partial class Main : Node2D
 
     private void RefreshMousePassthrough()
     {
-        Vector2[] region = [
-            new Vector2(56f, 8f),
-            new Vector2(140f, 8f),
-            new Vector2(158f, 28f),
-            new Vector2(144f, 28f),
-            new Vector2(162f, 46f),
-            new Vector2(176f, 88f),
-            new Vector2(150f, 108f),
-            new Vector2(146f, 164f),
-            new Vector2(126f, 180f),
-            new Vector2(104f, 180f),
-            new Vector2(96f, 166f),
-            new Vector2(88f, 180f),
-            new Vector2(66f, 180f),
-            new Vector2(46f, 164f),
-            new Vector2(42f, 108f),
-            new Vector2(16f, 88f),
-            new Vector2(30f, 46f),
-            new Vector2(48f, 28f)
-        ];
-        region = region.Select(point => point + PetOffset).ToArray();
+        if (pet is null) return;
+        var region = pet.HitPolygon.Select(point => point + PetOffset).ToArray();
         if (feedback?.Visible == true)
         {
             // Windows 会同时裁剪穿透区域之外的画面，气泡显示时须包含其边界。
