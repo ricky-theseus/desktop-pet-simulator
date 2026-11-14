@@ -1,6 +1,6 @@
 # Mod 管理服务与内容包 v1
 
-当前运行时 API 为 `1.0`。管理器是 `official-mod-manager`，Steam 接入是 `official-steam`；两者通过 `ModContext.Services` 使用公共服务。Core 提供文件校验、状态保存与服务契约，不依赖 Godot 或 Steamworks。
+当前运行时 API 为 `1.0`。管理器是 `official-mod-manager`，Steam 接入是 `official-steam`；两者通过 `ModContext.Services` 使用公共服务。Core 提供文件校验、状态保存与服务契约，不依赖 Godot 或 Steamworks。管理器使用统一列表，不划分内容来源；Steam 账号和订阅 API 保留在独立服务中，不作为管理器界面依赖。
 
 ## 首版兼容范围
 
@@ -41,12 +41,14 @@ ZIP 根目录必须包含 `manifest.json`，不能额外套一层文件夹：
 | 接口 | 用途 |
 | --- | --- |
 | `IModManagementService` | `List`、`ImportZip`、`SetEnabled`、`SelectAppearance`、`Remove`；读取安装目录及当前选择 |
-| `IPetAppearanceService` | 在 Godot 主线程调用 `ApplyAppearance(path)`；`null` 恢复默认形象；加载失败保留当前画面 |
+| `IPetAppearanceService` | 在 Godot 主线程调用 `ApplyAppearance(path)`；`null` 恢复默认形象；加载失败保留当前画面。`ClearAppearance()` 清除外观并释放资源，管理入口继续可用 |
 | `ISteamService` | 读取 `Status`；`GetSubscriptions` 刷新账号及订阅安装状态，不修改远端内容 |
 
 管理服务必须串行调用。管理器将导入放到后台任务，期间禁用其他修改入口；关闭窗口可请求取消，30 秒后自动请求取消。复制阶段响应取消，最终目录移动和状态提交为不可中断的短事务。成功返回后包已完整安装；失败会清理暂存目录。没有执行外部命令或访问网络的导入步骤。
 
-`ManagedMod.Enabled` 表示配置是否启用且有效。对内置 Mod，`Running` 表示本次会话启动时的启用状态；对外观包表示它是否为当前选择。Steam 的联网状态应读取 `ISteamService.Status`，不能从 `Running` 推断。
+`ManagedMod.Enabled` 表示配置是否启用且有效。`BuiltInMod.AppearancePath` 可声明内置外观，和本地外观使用相同选择规则。对代码 Mod，`Running` 表示本次会话启动时的启用状态；对外观（包括内置外观）表示它是否为当前选择。Steam 的联网状态应读取 `ISteamService.Status`，不能从 `Running` 推断。
+
+`SetEnabled(id, true)` 启用外观时，同时原子保存为当前选择。关闭或移除当前外观后，选择列表中第一个可用且已启用的外观；没有可用外观时，`SelectedAppearanceId/Path` 返回 `null`。管理器在保存开关/选择前实际加载候选外观；解码失败保留原配置和画面，保存失败恢复原画面。全关闭时导入的首个外观若不能显示，仍保留安装记录，但自动关闭该包并显示原因。
 
 缺依赖的包可安装，但保持禁用并显示原因。停用或移除被其他有效、已启用 Mod 依赖的包会被拒绝。相同 ID 的新版本不会覆盖旧包；先卸载旧版本再导入。当前没有第三方代码加载、自动更新或热重载代码的协议。
 
@@ -59,7 +61,7 @@ ZIP 根目录必须包含 `manifest.json`，不能额外套一层文件夹：
 - `removed/<id>-<随机值>/`：卸载时保留的原内容，便于人工恢复；不会自动清空。
 - `mods-state.json.invalid-*`：损坏配置的备份，随后使用默认状态。
 
-默认蘑菇和管理器不能禁用或卸载。停用或卸载当前外观恢复默认蘑菇。内置 Steam Mod 的启用更改需重启生效。`--safe-mode` 暂不加载用户选择的外观及 Steam，保留管理器供恢复；`--mod-data-dir=<目录>` 可使用独立测试档，不应对同一目录同时运行多个宿主。
+管理器默认开启，不能自行关闭或卸载；其他官方 Mod 均可关闭。内置文件随应用发布，不支持从界面删除。默认蘑菇是可选外观，不会在全部外观关闭后强制恢复。宿主此时停止渲染宠物并穿透鼠标，托盘仍可打开管理器；关闭管理窗口只收起，托盘菜单“退出桌宠”才终止进程。内置 Steam Mod 的启用更改需重启生效。`--safe-mode` 临时显示默认外观且不启动 Steam，保留管理器供恢复，不改写保存状态；`--mod-data-dir=<目录>` 可使用独立测试档，不应对同一目录同时运行多个宿主。
 
 内容包错误使用 `ModManagementException.Code`，v1 代码前缀为 `package.*` 和 `mod.*`，包括 `package.path`、`package.permission`、`package.version`、`package.limit`、`mod.duplicate`、`mod.required`、`mod.dependency`。文件系统错误保持 .NET 的 IO 异常，取消为 `OperationCanceledException`，无效外观定义为 `ArgumentException`。界面显示原因并保持运行。
 

@@ -80,6 +80,17 @@ public partial class PetView : Node2D
         textures = [];
     }
 
+    public void ClearAppearance()
+    {
+        sprite.Texture = null;
+        timeline = null;
+        HitPolygon = [];
+        if (ownsTextures)
+            foreach (var texture in textures) texture.Dispose();
+        textures = [];
+        ownsTextures = false;
+    }
+
     private static Texture2D LoadTexture(string path)
     {
         if (path.StartsWith("res://"))

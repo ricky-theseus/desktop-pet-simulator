@@ -7,9 +7,9 @@
 - 生命周期初始化、每帧回调、停止时关闭。
 - 校验运行中的 App ID 与项目配置一致，读取登录状态和昵称。
 - 查询订阅 ID、安装目录，以及未下载、等待更新、已安装状态。
-- 由用户点击导入已下载订阅中的 `mod.zip`，经过与本地 ZIP 相同的验证；需要更新的项目先等待 Steam 完成更新。
+- 通过公共服务提供订阅结果，供其他 Mod 使用；管理器统一导入 ZIP，不另设 Steam 界面。
 
-权限声明为 `steam.read`、`workshop.read`。本版不提交工坊作品、不主动请求下载、不修改成就或云存档。工坊浏览按钮由用户点击后打开系统浏览器，不依赖透明小窗口的 Steam Overlay。
+权限声明为 `steam.read`、`workshop.read`。本版不提交工坊作品、不主动请求下载、不修改成就或云存档，也不依赖透明小窗口的 Steam Overlay。
 
 ## 无 App ID
 
@@ -20,9 +20,9 @@
 1. 将 `desktop_pet/steam_app_id` 改为本应用 ID；通过 Steam 启动，或按 Valve 文档在开发进程工作目录提供本地 `steam_appid.txt`。该文件已忽略，不随正式包发布。
 2. 从已获授权的 Steamworks SDK **1.60** 提供匹配架构的原生库：Windows x64 为 `steam_api64.dll`；macOS 为 `libsteam_api.dylib`。NuGet 包提供托管封装，不包含这些原生库。
 3. 使用 `dotnet build runtime/DesktopPet.Runtime.csproj -p:SteamworksNativeLibrary=<原生库文件>` 复制到程序集输出目录；发行构建也需确认该库随包发布且可加载。macOS 还需完成签名、平台测试和相应导出配置。
-4. 使用有应用权限的 Steam 账号启动客户端。确认管理器显示昵称和连接状态，再测试订阅、下载、更新及安装导入。
+4. 使用有应用权限的 Steam 账号启动客户端。通过 `ISteamService.Status` 验证昵称和连接状态，再测试 `GetSubscriptions` 的订阅、下载和更新状态；内容包可使用统一 ZIP 入口导入。
 
-原生库缺失、架构错误、版本入口不匹配或初始化失败会显示离线原因，本地内容继续可用。不同 SDK 版本的库不要未经验证混用。本仓库不包含 Steam 原生二进制和账号凭据。
+原生库缺失、架构错误、版本入口不匹配或初始化失败会在服务状态中返回离线原因，本地内容继续可用。不同 SDK 版本的库不要未经验证混用。本仓库不包含 Steam 原生二进制和账号凭据。
 
 工坊内容约定：每个 Workshop 项目根目录放 `mod.zip`，其内容满足 [外观内容包 v1](../../../sdk/mod-management-v1.md)。导入是本地副本，取消订阅不会自动删除已导入内容。包更新暂按卸载旧版再导入新版处理。
 

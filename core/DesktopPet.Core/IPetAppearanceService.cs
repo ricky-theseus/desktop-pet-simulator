@@ -5,4 +5,6 @@ public interface IPetAppearanceService
 {
     string ApiVersion { get; }
     void ApplyAppearance(string? path);
+    /// <summary>停止显示宠物并释放当前外观；管理器与托盘入口继续可用。</summary>
+    void ClearAppearance();
 }

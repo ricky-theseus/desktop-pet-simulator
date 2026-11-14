@@ -16,6 +16,9 @@ public partial class Main : Node2D, IPetAppearanceService
     private const int ModsAction = 5;
     private ModManagerMod? modManager;
     private SteamMod? steam;
+    private StatusIndicator? tray;
+    private bool wholeWindowPassthrough;
+    private const string DefaultAppearance = "res://assets/mushroom/appearance.json";
 
     private PetView? pet;
     private readonly MushroomPetState petState = new();
@@ -51,7 +54,7 @@ public partial class Main : Node2D, IPetAppearanceService
         var dataDirectory = arguments.FirstOrDefault(arg => arg.StartsWith("--mod-data-dir="))?[15..]
             ?? System.IO.Path.Combine(OS.GetUserDataDir(), "mod-platform");
         var management = new ModManagementService(dataDirectory, [
-            new("official-mushroom", "默认蘑菇", "0.1.0", "初始蘑菇形象，带有待机、摸摸、进食、提起和落地动作。也作为其他外观无法加载时的恢复形象。", true),
+            new("official-mushroom", "默认蘑菇", "0.1.0", "初始蘑菇形象，带有待机、摸摸、进食、提起和落地动作，可关闭或替换。", false, DefaultAppearance),
             new("official-mod-manager", "Mod 管理器", "0.1.0", "导入、启用和管理本地 Mod。此管理入口始终保留，方便恢复桌宠。", true),
             new("official-steam", "Steam 连接", "0.1.0", "连接 Steam 账号并读取创意工坊订阅。当前未配置正式 App ID 时保持离线。启用状态在重启后生效。", false)
         ]);
@@ -60,19 +63,25 @@ public partial class Main : Node2D, IPetAppearanceService
         services.Add<IPetAppearanceService>(this);
         host = new ModHost(new ModHostOptions("1.0"), services);
         var mushroom = new MushroomMod();
-        host.Register(mushroom);
+        if (management.List().Any(mod => mod.Id == "official-mushroom" && mod.Enabled)) host.Register(mushroom);
         steam = new SteamMod((uint)ProjectSettings.GetSetting("desktop_pet/steam_app_id", 0).AsInt64());
         services.Add<ISteamService>(steam);
         if (!safeMode && management.List().Any(mod => mod.Id == "official-steam" && mod.Enabled)) host.Register(steam);
 
         pet = new PetView { Position = PetOffset };
         AddChild(pet);
-        try { ApplyAppearance(safeMode ? null : management.SelectedAppearancePath); }
+        var failedAppearance = false;
+        try
+        {
+            if (safeMode) ApplyAppearance(null);
+            else if (management.SelectedAppearancePath is { } path) ApplyAppearance(path);
+            else ClearAppearance();
+        }
         catch (Exception exception)
         {
-            GD.PushWarning("外观加载失败，已恢复默认蘑菇：" + exception.Message);
-            ApplyAppearance(null);
-            management.SelectAppearance(null);
+            GD.PushWarning("外观加载失败，请在管理器中切换或关闭该 Mod：" + exception.Message);
+            ClearAppearance();
+            failedAppearance = true;
         }
 
         menu = new PopupMenu { Theme = CreateMenuTheme() };
@@ -96,8 +105,35 @@ public partial class Main : Node2D, IPetAppearanceService
         modManager = new ModManagerMod(this, PresentModWindow);
         host.Register(modManager);
         host.StartAll();
-        if (arguments.Contains("--open-mod-manager")) modManager.Show();
+        CreateTray();
+        if (arguments.Contains("--open-mod-manager") || failedAppearance) modManager.Show();
         RefreshMousePassthrough();
+    }
+
+    private void CreateTray()
+    {
+        if (!DisplayServer.HasFeature(DisplayServer.Feature.StatusIndicator)) return;
+        var trayMenu = new PopupMenu { Name = "TrayMenu", PreferNativeMenu = true, Theme = CreateMenuTheme() };
+        trayMenu.AddItem("打开 Mod 管理器", ModsAction);
+        trayMenu.AddSeparator();
+        trayMenu.AddItem("退出桌宠", QuitAction);
+        trayMenu.IdPressed += OnMenuItemPressed;
+        AddChild(trayMenu);
+        tray = new StatusIndicator
+        {
+            Name = "DesktopTray", Tooltip = "桌面宠物模拟器 · 点击打开 Mod 管理器",
+            Icon = GD.Load<Texture2D>("res://assets/mushroom/actions-v1/01.png"), Visible = true
+        };
+        tray.Pressed += (button, position) =>
+        {
+            if (button == (long)MouseButton.Left) modManager?.Show();
+            else if (button == (long)MouseButton.Right)
+            {
+                trayMenu.Position = position;
+                trayMenu.Popup();
+            }
+        };
+        AddChild(tray);
     }
 
     private static void PresentModWindow(Window window)
@@ -105,12 +141,13 @@ public partial class Main : Node2D, IPetAppearanceService
         if (!OperatingSystem.IsWindows() || DisplayServer.GetName() == "headless") return;
         WindowsDesktopWindow.ShowOwnedWindow(
             (nint)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle, window.GetWindowId()),
-            (nint)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle));
+            (nint)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle, window.GetParent().GetWindow().GetWindowId()));
     }
 
     public void ApplyAppearance(string? path)
     {
-        pet?.LoadAppearance(path ?? "res://assets/mushroom/appearance.json");
+        pet?.LoadAppearance(path ?? DefaultAppearance);
+        if (pet is not null) pet.Visible = true;
         if (menu is not null && pet is not null)
         {
             menu.SetItemText(menu.GetItemIndex(FeedAction), $"喂{pet.DisplayName}");
@@ -119,10 +156,21 @@ public partial class Main : Node2D, IPetAppearanceService
         RefreshMousePassthrough();
     }
 
+    public void ClearAppearance()
+    {
+        if (pet is null) return;
+        pet.ClearAppearance();
+        pet.Visible = false;
+        if (feedback is not null) feedback.Visible = false;
+        menu?.Hide();
+        CancelPointer();
+        RefreshMousePassthrough();
+    }
+
     public override void _Process(double delta)
     {
         steam?.Tick();
-        petState.Tick((float)delta);
+        if (pet?.Visible == true) petState.Tick((float)delta);
         if (feedback is null || !feedback.Visible)
         {
             return;
@@ -138,7 +186,7 @@ public partial class Main : Node2D, IPetAppearanceService
 
     public override void _UnhandledInput(InputEvent inputEvent)
     {
-        if (pet is null) return;
+        if (pet is null || !pet.Visible) return;
 
         if (inputEvent is InputEventMouseMotion motion && pointerDown)
         {
@@ -215,6 +263,7 @@ public partial class Main : Node2D, IPetAppearanceService
 
     public override void _ExitTree()
     {
+        if (tray is not null) tray.Visible = false;
         GetWindow().FocusExited -= CancelPointer;
         host?.StopAll();
     }
@@ -261,6 +310,15 @@ public partial class Main : Node2D, IPetAppearanceService
     private void RefreshMousePassthrough()
     {
         if (pet is null) return;
+        if (wholeWindowPassthrough == pet.Visible)
+        {
+            wholeWindowPassthrough = !pet.Visible;
+            DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.MousePassthrough, wholeWindowPassthrough);
+            // Godot 刷新窗口标记时会重建 Windows 扩展样式，需要重新保留无任务栏行为。
+            if (OperatingSystem.IsWindows() && DisplayServer.GetName() != "headless" && !OS.GetCmdlineUserArgs().Contains("--show-taskbar"))
+                WindowsDesktopWindow.HideTaskbarButton((nint)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle));
+        }
+        if (!pet.Visible) return;
         var region = pet.HitPolygon.Select(point => point + PetOffset).ToArray();
         if (feedback?.Visible == true)
         {

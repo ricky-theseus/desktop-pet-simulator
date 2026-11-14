@@ -156,6 +156,25 @@ public sealed class ModManagementTests : IDisposable
         Assert.Equal(2, service.List().Count);
     }
 
+    [Fact]
+    public void BuiltInAppearanceCanBeReplacedAndAllAppearancesCanBeDisabled()
+    {
+        ModManagementService Create() => new(root, [
+            new BuiltInMod("official-mod-manager", "管理器", "0.1.0", "", true),
+            new BuiltInMod("official-mushroom", "蘑菇", "0.1.0", "", false, "res://mushroom.json")
+        ]);
+        var service = Create();
+        Assert.Equal("official-mushroom", service.SelectedAppearanceId);
+        service.ImportZip(Package());
+        service.SetEnabled("official-mushroom", false);
+        Assert.Equal("test-pet", service.SelectedAppearanceId);
+        service.SetEnabled("test-pet", false);
+        Assert.Null(service.SelectedAppearancePath);
+        Assert.Null(Create().SelectedAppearancePath);
+        service.SetEnabled("official-mushroom", true);
+        Assert.Equal("res://mushroom.json", Create().SelectedAppearancePath);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(root)) Directory.Delete(root, true);

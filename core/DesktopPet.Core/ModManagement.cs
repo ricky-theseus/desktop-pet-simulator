@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 
 namespace DesktopPet.Core;
 
-public sealed record BuiltInMod(string Id, string Name, string Version, string Description, bool Required);
+public sealed record BuiltInMod(string Id, string Name, string Version, string Description, bool Required, string? AppearancePath = null);
 public sealed record ManagedMod(string Id, string Name, string Version, string Description, string Source,
     bool Enabled, bool Running, bool Required, string? Error, string? AppearancePath);
 
@@ -52,8 +52,8 @@ public sealed class ModManagementService : IModManagementService
     private Settings settings;
     public string ApiVersion => "1.0";
     public string ModsDirectory { get; }
-    public string? SelectedAppearanceId => settings.SelectedAppearance;
-    public string? SelectedAppearancePath => List().FirstOrDefault(mod => mod.Id == settings.SelectedAppearance && mod.Enabled && mod.Error is null)?.AppearancePath;
+    public string? SelectedAppearanceId => List().FirstOrDefault(mod => mod.AppearancePath is not null && mod.Running)?.Id;
+    public string? SelectedAppearancePath => List().FirstOrDefault(mod => mod.AppearancePath is not null && mod.Running)?.AppearancePath;
 
     public ModManagementService(string dataDirectory, IEnumerable<BuiltInMod> builtIns)
     {
@@ -81,7 +81,7 @@ public sealed class ModManagementService : IModManagementService
     {
         var manifests = new Dictionary<string, ContentModManifest>();
         var result = builtIns.Select(mod => new ManagedMod(mod.Id, mod.Name, mod.Version, mod.Description, "内置",
-            mod.Required || !settings.Disabled.Contains(mod.Id), initiallyEnabled.Contains(mod.Id), mod.Required, null, null)).ToList();
+            mod.Required || !settings.Disabled.Contains(mod.Id), initiallyEnabled.Contains(mod.Id), mod.Required, null, mod.AppearancePath)).ToList();
         foreach (var directory in Directory.GetDirectories(ModsDirectory).Order())
         {
             try
@@ -117,11 +117,14 @@ public sealed class ModManagementService : IModManagementService
             }
             finally { visiting.Remove(id); }
         }
-        return result.Select(mod =>
+        var validated = result.Select(mod =>
         {
             var error = mod.Error ?? (mod.Source == "本地" ? DependencyError(mod.Id, []) : null);
             return error is null ? mod : mod with { Error = error, Enabled = false, Running = false };
         }).ToArray();
+        var available = validated.Where(mod => mod.Enabled && mod.Error is null && mod.AppearancePath is not null).ToArray();
+        var active = available.FirstOrDefault(mod => mod.Id == settings.SelectedAppearance) ?? available.FirstOrDefault();
+        return validated.Select(mod => mod.AppearancePath is null ? mod : mod with { Running = mod.Id == active?.Id }).ToArray();
     }
 
     public string ImportZip(string path, CancellationToken cancellationToken = default)
@@ -197,8 +200,8 @@ public sealed class ModManagementService : IModManagementService
     public void SetEnabled(string id, bool enabled)
     {
         var target = Find(id);
-        if (target.Required && !enabled) throw Error("mod.required", "基础管理器和默认外观用于恢复，不能禁用。");
-        if (target.Error is not null) throw Error("mod.invalid", target.Error);
+        if (target.Required && !enabled) throw Error("mod.required", "管理入口需要保持启用。");
+        if (enabled && target.Error is not null) throw Error("mod.invalid", target.Error);
         if (enabled && target.Source == "本地")
         {
             var dependencies = ReadManifest(PackagePath(ModsDirectory, id)).Dependencies;
@@ -209,7 +212,8 @@ public sealed class ModManagementService : IModManagementService
         if (!enabled) EnsureNoDependents(id);
         var disabled = new HashSet<string>(settings.Disabled);
         if (enabled) disabled.Remove(id); else disabled.Add(id);
-        Save(disabled, !enabled && settings.SelectedAppearance == id ? null : settings.SelectedAppearance);
+        Save(disabled, enabled && target.AppearancePath is not null ? id :
+            !enabled && settings.SelectedAppearance == id ? null : settings.SelectedAppearance);
     }
 
     public void SelectAppearance(string? id)

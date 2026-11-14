@@ -19,7 +19,7 @@ internal static class WindowsDesktopWindow
         var error = Marshal.GetLastWin32Error();
         if (previous == 0 && error != 0) throw new Win32Exception(error);
         // 隐藏启动参数可能覆盖 Godot 首次 ShowWindow；显式再次显示同步原生可见性。
-        // 设置 owner 可保留正常标题栏，同时避免管理器产生独立任务栏按钮。
+        // 设置 owner 建立所属关系，避免管理器产生独立任务栏按钮。
         ShowWindow(handle, IsIconic(handle) ? 9 : 5);
     }
 
