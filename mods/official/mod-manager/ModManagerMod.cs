@@ -32,9 +32,9 @@ public sealed class ModManagerMod(Node parent, Action<Window>? presentNativeWind
         appearance = context.Services.GetRequired<IPetAppearanceService>();
         window = new Window
         {
-            Name = "ModManager", Title = "Mod 管理器 · 桌面宠物模拟器", Visible = false,
+            Name = "ModManager", Title = "Mod 管理器", Visible = false,
             Size = new Vector2I(700, 410), MinSize = new Vector2I(500, 280),
-            Borderless = true, Transient = true, Theme = CreateTheme(), Transparent = false
+            Borderless = false, Transient = false, AlwaysOnTop = false, Theme = CreateTheme(), Transparent = false
         };
         window.CloseRequested += Close;
         window.WindowInput += input => { if (input is InputEventKey { Pressed: true, Keycode: Key.Escape }) Close(); };
@@ -50,15 +50,11 @@ public sealed class ModManagerMod(Node parent, Action<Window>? presentNativeWind
         window.AddChild(background);
         background.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         var margin = new MarginContainer();
-        foreach (var edge in new[] { "left", "right", "bottom" }) margin.AddThemeConstantOverride("margin_" + edge, 20);
+        foreach (var edge in new[] { "left", "right", "top", "bottom" }) margin.AddThemeConstantOverride("margin_" + edge, 20);
         background.AddChild(margin);
         var body = new VBoxContainer();
         body.AddThemeConstantOverride("separation", 12);
         margin.AddChild(body);
-        var drag = new Control { Name = "WindowDragArea", CustomMinimumSize = new Vector2(0, 8), MouseDefaultCursorShape = Control.CursorShape.Move };
-        drag.GuiInput += input => { if (input is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) window.StartDrag(); };
-        body.AddChild(drag);
-
         var toolbar = new HBoxContainer { Name = "Toolbar" };
         toolbar.AddThemeConstantOverride("separation", 12);
         body.AddChild(toolbar);
@@ -78,13 +74,6 @@ public sealed class ModManagerMod(Node parent, Action<Window>? presentNativeWind
             import.AddThemeColorOverride(state, Colors.White);
         import.Pressed += () => picker.PopupCentered();
         toolbar.AddChild(import);
-        var close = new Button
-        {
-            Name = "CloseManager", Icon = Icon("<path d='M6 6l12 12M18 6L6 18'/>"),
-            TooltipText = "关闭管理器（Esc）", CustomMinimumSize = new Vector2(44, 44)
-        };
-        close.Pressed += Close;
-        toolbar.AddChild(close);
         error = Text(body, "", 17, "#9c334c");
         error.Name = "ImportError";
         error.Visible = false;
@@ -106,17 +95,6 @@ public sealed class ModManagerMod(Node parent, Action<Window>? presentNativeWind
         empty.CustomMinimumSize = new Vector2(0, 80);
         empty.HorizontalAlignment = HorizontalAlignment.Center;
         moreIcon = Icon("<circle cx='5' cy='12' r='1' fill='#716575'/><circle cx='12' cy='12' r='1' fill='#716575'/><circle cx='19' cy='12' r='1' fill='#716575'/>");
-        var resize = new Control { Name = "WindowResize", MouseDefaultCursorShape = Control.CursorShape.Fdiagsize };
-        window.AddChild(resize);
-        resize.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomRight);
-        resize.OffsetLeft = -12;
-        resize.OffsetTop = -12;
-        resize.GuiInput += input =>
-        {
-            if (input is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
-                DisplayServer.WindowStartResize(DisplayServer.WindowResizeEdge.BottomRight, window.GetWindowId());
-        };
-
         picker = new FileDialog
         {
             Name = "ImportPicker", Title = "导入 Mod", Access = FileDialog.AccessEnum.Filesystem,
@@ -125,7 +103,7 @@ public sealed class ModManagerMod(Node parent, Action<Window>? presentNativeWind
         };
         picker.FileSelected += BeginImport;
         window.AddChild(picker);
-        confirmation = new ConfirmationDialog { Name = "RemoveConfirmation", Title = "卸载 Mod", OkButtonText = "卸载", CancelButtonText = "取消" };
+        confirmation = new ConfirmationDialog { Name = "RemoveConfirmation", Title = "卸载 Mod", Transient = true, OkButtonText = "卸载", CancelButtonText = "取消" };
         confirmation.Confirmed += () => Run(() =>
         {
             if (removalId is null) return;

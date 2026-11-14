@@ -11,6 +11,5 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
     <ProjectReference Include="..\..\..\core\DesktopPet.Core\DesktopPet.Core.csproj" />
     <ProjectReference Include="..\..\..\mods\official\mushroom\DesktopPet.OfficialMushroom.csproj" />
-    <ProjectReference Include="..\..\..\mods\official\steam\DesktopPet.OfficialSteam.csproj" />
   </ItemGroup>
 </Project>

@@ -1,7 +1,6 @@
 using DesktopPet.Core;
 using DesktopPet.OfficialMushroom;
 using DesktopPet.OfficialModManager;
-using DesktopPet.OfficialSteam;
 using Godot;
 
 namespace DesktopPet.Runtime;
@@ -15,7 +14,7 @@ public partial class Main : Node2D, IPetAppearanceService
     private const int QuitAction = 4;
     private const int ModsAction = 5;
     private ModManagerMod? modManager;
-    private SteamMod? steam;
+    private Action? tickDistribution = null;
     private StatusIndicator? tray;
     private bool wholeWindowPassthrough;
     private const string DefaultAppearance = "res://assets/mushroom/appearance.json";
@@ -55,8 +54,7 @@ public partial class Main : Node2D, IPetAppearanceService
             ?? System.IO.Path.Combine(OS.GetUserDataDir(), "mod-platform");
         var management = new ModManagementService(dataDirectory, [
             new("official-mushroom", "默认蘑菇", "0.1.0", "初始蘑菇形象，带有待机、摸摸、进食、提起和落地动作，可关闭或替换。", false, DefaultAppearance),
-            new("official-mod-manager", "Mod 管理器", "0.1.0", "导入、启用和管理本地 Mod。此管理入口始终保留，方便恢复桌宠。", true),
-            new("official-steam", "Steam 连接", "0.1.0", "连接 Steam 账号并读取创意工坊订阅。当前未配置正式 App ID 时保持离线。启用状态在重启后生效。", false)
+            new("official-mod-manager", "Mod 管理器", "0.1.0", "导入、启用和管理本地 Mod。此管理入口始终保留，方便恢复桌宠。", true)
         ]);
         var services = new ServiceRegistry();
         services.Add<IModManagementService>(management);
@@ -64,9 +62,8 @@ public partial class Main : Node2D, IPetAppearanceService
         host = new ModHost(new ModHostOptions("1.0"), services);
         var mushroom = new MushroomMod();
         if (management.List().Any(mod => mod.Id == "official-mushroom" && mod.Enabled)) host.Register(mushroom);
-        steam = new SteamMod((uint)ProjectSettings.GetSetting("desktop_pet/steam_app_id", 0).AsInt64());
-        services.Add<ISteamService>(steam);
-        if (!safeMode && management.List().Any(mod => mod.Id == "official-steam" && mod.Enabled)) host.Register(steam);
+        services.Add<ISteamService>(new OfflineSteamService());
+        ConfigureDistribution(services, host, safeMode);
 
         pet = new PetView { Position = PetOffset };
         AddChild(pet);
@@ -136,12 +133,17 @@ public partial class Main : Node2D, IPetAppearanceService
         AddChild(tray);
     }
 
+    // 发行实现由显式构建选项接入；公共构建没有实现时，此调用在编译时移除。
+    partial void ConfigureDistribution(ServiceRegistry services, ModHost modHost, bool safeMode);
+
     private static void PresentModWindow(Window window)
     {
         if (!OperatingSystem.IsWindows() || DisplayServer.GetName() == "headless") return;
         WindowsDesktopWindow.ShowOwnedWindow(
             (nint)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle, window.GetWindowId()),
-            (nint)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle, window.GetParent().GetWindow().GetWindowId()));
+            window.Transient
+                ? (nint)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle, window.GetParent().GetWindow().GetWindowId())
+                : 0);
     }
 
     public void ApplyAppearance(string? path)
@@ -169,7 +171,7 @@ public partial class Main : Node2D, IPetAppearanceService
 
     public override void _Process(double delta)
     {
-        steam?.Tick();
+        tickDistribution?.Invoke();
         if (pet?.Visible == true) petState.Tick((float)delta);
         if (feedback is null || !feedback.Visible)
         {

@@ -1,6 +1,6 @@
 # Mod 管理服务与内容包 v1
 
-当前运行时 API 为 `1.0`。管理器是 `official-mod-manager`，Steam 接入是 `official-steam`；两者通过 `ModContext.Services` 使用公共服务。Core 提供文件校验、状态保存与服务契约，不依赖 Godot 或 Steamworks。管理器使用统一列表，不划分内容来源；Steam 账号和订阅 API 保留在独立服务中，不作为管理器界面依赖。
+当前运行时 API 为 `1.0`。管理器是 `official-mod-manager`，通过 `ModContext.Services` 使用公共服务。Core 提供文件校验、状态保存与服务契约，不依赖 Godot 或 Steamworks。管理器只列出玩家 Mod；Steam 等发行集成由宿主独立加载，不向管理服务登记，玩家不能搜索、启停或卸载这些集成。公开构建仅注册离线平台服务。
 
 ## 首版兼容范围
 
@@ -61,7 +61,7 @@ ZIP 根目录必须包含 `manifest.json`，不能额外套一层文件夹：
 - `removed/<id>-<随机值>/`：卸载时保留的原内容，便于人工恢复；不会自动清空。
 - `mods-state.json.invalid-*`：损坏配置的备份，随后使用默认状态。
 
-管理器默认开启，不能自行关闭或卸载；其他官方 Mod 均可关闭。内置文件随应用发布，不支持从界面删除。默认蘑菇是可选外观，不会在全部外观关闭后强制恢复。宿主此时停止渲染宠物并穿透鼠标，托盘仍可打开管理器；关闭管理窗口只收起，托盘菜单“退出桌宠”才终止进程。内置 Steam Mod 的启用更改需重启生效。`--safe-mode` 临时显示默认外观且不启动 Steam，保留管理器供恢复，不改写保存状态；`--mod-data-dir=<目录>` 可使用独立测试档，不应对同一目录同时运行多个宿主。
+管理器默认开启，不能自行关闭或卸载；列表内其他官方 Mod 均可关闭。内置文件随应用发布，不支持从界面删除。默认蘑菇是可选外观，不会在全部外观关闭后强制恢复。宿主此时停止渲染宠物并穿透鼠标，托盘仍可打开管理器；关闭管理窗口只收起，托盘菜单“退出桌宠”才终止进程。旧配置中的 `official-steam` 禁用记录不再控制发行集成。`--safe-mode` 临时显示默认外观并请求发行实现使用安全模式，保留管理器供恢复，不改写保存状态；`--mod-data-dir=<目录>` 可使用独立测试档，不应对同一目录同时运行多个宿主。
 
 内容包错误使用 `ModManagementException.Code`，v1 代码前缀为 `package.*` 和 `mod.*`，包括 `package.path`、`package.permission`、`package.version`、`package.limit`、`mod.duplicate`、`mod.required`、`mod.dependency`。文件系统错误保持 .NET 的 IO 异常，取消为 `OperationCanceledException`，无效外观定义为 `ArgumentException`。界面显示原因并保持运行。
 

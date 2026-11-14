@@ -17,7 +17,6 @@ config/features=PackedStringArray("4.5", "C#", "GL Compatibility")
 [desktop_pet]
 
 appearance="res://assets/mushroom/appearance.json"
-steam_app_id=0
 
 [display]
 

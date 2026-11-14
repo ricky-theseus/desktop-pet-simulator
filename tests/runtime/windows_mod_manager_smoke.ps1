@@ -23,6 +23,7 @@ public static class NativeModWindowTest {
     [DllImport("user32.dll")] static extern bool ClientToScreen(IntPtr window, ref Point point);
     [DllImport("user32.dll")] static extern bool GetClientRect(IntPtr window, out Rect rect);
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out Rect rect);
     [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(Point point);
     [DllImport("user32.dll")] static extern void mouse_event(uint flags, uint x, uint y, uint data, UIntPtr extra);
     public static Point ClientSize(IntPtr window) {
@@ -47,8 +48,25 @@ public static class NativeModWindowTest {
         mouse_event(0x2, 0, 0, 0, UIntPtr.Zero);
         mouse_event(0x4, 0, 0, 0, UIntPtr.Zero);
     }
+    public static void DragTitleBar(IntPtr window, uint target) {
+        MoveToControl(window, target, 100, 30);
+        GetWindowRect(window, out var bounds);
+        var client = new Point();
+        ClientToScreen(window, ref client);
+        var x = bounds.Left + 180;
+        var y = (bounds.Top + client.Y) / 2;
+        SetCursorPos(x, y);
+        GetCursorPos(out var point);
+        if (WindowFromPoint(point) != window) throw new InvalidOperationException("标题栏被遮挡，取消拖动测试。");
+        mouse_event(0x2, 0, 0, 0, UIntPtr.Zero);
+        try {
+            System.Threading.Thread.Sleep(100);
+            SetCursorPos(x + 60, y + 40);
+            System.Threading.Thread.Sleep(150);
+        } finally { mouse_event(0x4, 0, 0, 0, UIntPtr.Zero); }
+    }
     [StructLayout(LayoutKind.Sequential)] struct IconIdentifier { public uint Size; public IntPtr Window; public uint Id; public Guid Guid; }
-    [StructLayout(LayoutKind.Sequential)] struct Rect { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
     [DllImport("shell32.dll")] static extern int Shell_NotifyIconGetRect(ref IconIdentifier identifier, out Rect rect);
     public static int TrayId(IntPtr window) {
         // 独立测试进程仅有一个托盘图标，查询本进程窗口下的 ID，不访问其他应用。
@@ -120,27 +138,31 @@ function Open-ManagerFromMenu([IntPtr]$PetHandle) {
     Start-Sleep -Milliseconds 400
     Click-Client $menu 80 114
     Wait-Condition {
-        $handle = Find-Window 'Mod 管理器 · 桌面宠物模拟器'
-        $handle -ne [IntPtr]::Zero -and [NativeModWindowTest]::IsWindowVisible($handle) -and -not [NativeModWindowTest]::IsIconic($handle) -and [NativeModWindowTest]::GetWindow($handle, 4) -eq $PetHandle
+        $handle = Find-Window 'Mod 管理器'
+        $handle -ne [IntPtr]::Zero -and [NativeModWindowTest]::IsWindowVisible($handle) -and -not [NativeModWindowTest]::IsIconic($handle) -and [NativeModWindowTest]::GetWindow($handle, 4) -eq [IntPtr]::Zero
     } '选择菜单项后管理器没有显示。'
-    return Find-Window 'Mod 管理器 · 桌面宠物模拟器'
+    return Find-Window 'Mod 管理器'
 }
 try {
-    Wait-Condition { (Find-Window 'Mod 管理器 · 桌面宠物模拟器') -ne [IntPtr]::Zero } '管理窗口未创建。'
-    $manager = Find-Window 'Mod 管理器 · 桌面宠物模拟器'
+    Wait-Condition { (Find-Window 'Mod 管理器') -ne [IntPtr]::Zero } '管理窗口未创建。'
+    $manager = Find-Window 'Mod 管理器'
     $pet = Find-Window '桌面宠物模拟器 (DEBUG)'
     Wait-Condition { [NativeModWindowTest]::IsWindowVisible($manager) } '管理器内部已打开，但原生窗口仍然隐藏。'
-    if (([NativeModWindowTest]::GetWindowLongPtr($manager, -16).ToInt64() -band 0xC00000) -ne 0) { throw '管理器不应显示系统标题栏。' }
-    Wait-Condition { [NativeModWindowTest]::GetWindow($manager, 4) -eq $pet } '管理器应归属桌宠窗口，避免独立任务栏按钮。'
+    if (([NativeModWindowTest]::GetWindowLongPtr($manager, -16).ToInt64() -band 0xC00000) -eq 0) { throw '管理器缺少可拖动的系统标题栏。' }
+    Wait-Condition { [NativeModWindowTest]::GetWindow($manager, 4) -eq [IntPtr]::Zero } '管理器不能归属置顶宠物。'
+    if (([NativeModWindowTest]::GetWindowLongPtr($manager, -20).ToInt64() -band 0x8) -ne 0) { throw '管理器不能始终置顶。' }
     if (([NativeModWindowTest]::GetWindowLongPtr($pet, -20).ToInt64() -band 0x80) -eq 0) { throw '桌宠丢失隐藏任务栏的工具窗口样式。' }
 
-    # 默认布局第三行的开关，验证真实鼠标输入会改变并保存启用状态。
+    # 实际拖动系统标题栏，不能只检查窗口声明属性。
     Start-Sleep -Milliseconds 700
-    Click-Client $manager 584 289
+    $before = [NativeModWindowTest+Rect]::new()
+    [NativeModWindowTest]::GetWindowRect($manager, [ref]$before) | Out-Null
+    [NativeModWindowTest]::DragTitleBar($manager, $process.Id)
     Wait-Condition {
-        $statePath = Join-Path $profile 'mods-state.json'
-        (Test-Path -LiteralPath $statePath) -and ((Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json).Disabled -contains 'official-steam')
-    } '开关未保存 Mod 启用状态。'
+        $after = [NativeModWindowTest+Rect]::new()
+        [NativeModWindowTest]::GetWindowRect($manager, [ref]$after) | Out-Null
+        $after.Left -ne $before.Left -and $after.Top -ne $before.Top
+    } '拖动标题栏后窗口没有移动。'
 
     [NativeModWindowTest]::PostMessage($manager, 0x112, [IntPtr]0xF020, [IntPtr]0) | Out-Null
     Wait-Condition { [NativeModWindowTest]::IsIconic($manager) } '管理器未进入最小化状态。'
@@ -149,23 +171,24 @@ try {
     [NativeModWindowTest]::PostMessage($manager, 0x10, [IntPtr]0, [IntPtr]0) | Out-Null
     Wait-Condition { -not [NativeModWindowTest]::IsWindowVisible($manager) } '关闭管理器后窗口未隐藏。'
     $manager = Open-ManagerFromMenu $pet
-    if ([NativeModWindowTest]::GetWindow($manager, 4) -ne $pet) { throw '重新打开后管理器丢失所属窗口。' }
+    if (([NativeModWindowTest]::GetWindowLongPtr($manager, -20).ToInt64() -band 0x8) -ne 0) { throw '重新打开后管理器意外置顶。' }
     if ($process.HasExited) { throw '关闭管理器不应退出桌宠。' }
     Wait-Condition { [NativeModWindowTest]::TrayId($pet) -ge 0 } '系统托盘未注册桌宠图标。'
     $trayId = [NativeModWindowTest]::TrayId($pet)
     Click-Client $manager 584 123
     Wait-Condition {
-        (Get-Content -LiteralPath (Join-Path $profile 'mods-state.json') -Raw | ConvertFrom-Json).Disabled -contains 'official-mushroom'
+        $statePath = Join-Path $profile 'mods-state.json'
+        (Test-Path -LiteralPath $statePath) -and ((Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json).Disabled -contains 'official-mushroom')
     } '默认蘑菇不能关闭。'
     [NativeModWindowTest]::PostMessage($manager, 0x10, [IntPtr]0, [IntPtr]0) | Out-Null
     Wait-Condition { -not [NativeModWindowTest]::IsWindowVisible($manager) } '全部外观关闭后管理器未隐藏。'
     # 走 Windows 实际托盘回调入口，模拟已注册图标的左键通知。
     [NativeModWindowTest]::PostMessage($pet, 0x401, [IntPtr]$trayId, [IntPtr]0x201) | Out-Null
     Wait-Condition {
-        $handle = Find-Window 'Mod 管理器 · 桌面宠物模拟器'
+        $handle = Find-Window 'Mod 管理器'
         $handle -ne [IntPtr]::Zero -and [NativeModWindowTest]::IsWindowVisible($handle)
     } '从托盘无法恢复管理器。'
-    $manager = Find-Window 'Mod 管理器 · 桌面宠物模拟器'
+    $manager = Find-Window 'Mod 管理器'
     Click-Client $manager 584 123
     Wait-Condition {
         (Get-Content -LiteralPath (Join-Path $profile 'mods-state.json') -Raw | ConvertFrom-Json).Disabled -notcontains 'official-mushroom'
@@ -179,7 +202,7 @@ try {
     [NativeModWindowTest]::ClickNativePopup($trayMenu, $process.Id, [int]($menuSize.X / 2), $menuSize.Y - 16)
     if (-not $process.WaitForExit(5000)) { throw '托盘退出命令未结束进程。' }
     if ($process.ExitCode -ne 0) { throw "退出失败：$($process.ExitCode)" }
-    Write-Output 'Windows Mod manager smoke: PASS (startup, switches, native menu, minimize, reopen, tray registration/recovery/exit, taskbar)'
+    Write-Output 'Windows Mod manager smoke: PASS (native title-bar drag, non-topmost, switches, minimize, reopen, tray recovery/exit, taskbar)'
     Write-Output "Log: $log"
 } finally {
     [NativeModWindowTest]::SetCursorPos($originalCursor.X, $originalCursor.Y) | Out-Null

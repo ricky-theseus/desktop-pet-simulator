@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+while read -r local_ref local_oid remote_ref remote_oid; do
+    [ "$local_oid" != '0000000000000000000000000000000000000000' ] || continue
+    # 检查此次新增的每个提交，避免先提交私有文件再删除仍把历史推送出去。
+    commits=$(git rev-list "$local_oid" --not --remotes)
+    for commit in $commits; do
+        bash .githooks/check-public-paths "$commit"
+    done
+done

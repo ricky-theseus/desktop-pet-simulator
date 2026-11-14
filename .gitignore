@@ -39,3 +39,13 @@ steam_api64.dll
 libsteam_api.dylib
 libsteam_api.so
 
+# 商业实现、发行配置与专属 Mod 不进入公开仓库。
+/private/
+/commercial/
+/distribution-private/
+/mods/private/
+/mods/commercial/
+/mods/official/steam/
+*.private.*
+*.local.*
+

@@ -99,9 +99,10 @@ func run_checks():
     main.get_child(1).emit_signal("id_pressed", 5)
     await process_frame
     check(manager.visible, "右键菜单应打开管理器")
-    check(find_control(manager, "ModList").get_child_count() == 3, "新档应包含三个官方 Mod")
+    check(find_control(manager, "ModList").get_child_count() == 2, "玩家列表只包含默认外观和管理器")
+    check(row_for(manager, "official-steam") == null, "发行接入不属于玩家可管理 Mod")
     if DisplayServer.get_name() != "headless":
-        check(manager.borderless, "管理器不应显示冗余系统标题栏")
+        check(not manager.borderless and not manager.transient and not manager.always_on_top, "管理器应是独立普通窗口")
     check(find_control(manager, "ModTabs") == null, "应只有统一列表，不再划分工坊分页")
     check(not find_control(manager, "ImportError").visible, "默认不应有常驻提示")
     var default_toggle: CheckButton = row_for(manager, "official-mushroom").find_child("EnableToggle", true, false)
@@ -110,6 +111,8 @@ func run_checks():
     check(manager_toggle.button_pressed and manager_toggle.disabled, "管理入口应默认开启并保留")
     await capture(manager, "manager-installed")
     filter_mods(manager, "STEAM")
+    check(find_control(manager, "ModList").get_child_count() == 0, "搜索不能暴露平台发行入口")
+    filter_mods(manager, "MOD-MANAGER")
     check(find_control(manager, "ModList").get_child_count() == 1, "搜索应忽略大小写")
     filter_mods(manager, "没有这个mod")
     check(find_control(manager, "EmptyState").visible, "搜索无匹配应显示空状态")
@@ -127,7 +130,7 @@ func run_checks():
         var deadline := Time.get_ticks_msec() + 10000
         while find_control(manager, "ImportMod").disabled and Time.get_ticks_msec() < deadline:
             await process_frame
-        check(find_control(manager, "ModList").get_child_count() == 4, "ZIP 导入后应出现第四个 Mod")
+        check(find_control(manager, "ModList").get_child_count() == 3, "ZIP 导入后应出现第三个 Mod")
         if row_for(manager, "example-sleepy-mushroom") != null:
             act(manager, "example-sleepy-mushroom", 1)
             check(main.get_child(0).get("DisplayName") == "瞌睡蘑菇", "导入的原始 PNG 应能即时显示")
@@ -138,7 +141,7 @@ func run_checks():
             set_enabled(manager, "example-sleepy-mushroom", false)
             check(main.get_child(0).get("DisplayName") == "蘑菇", "禁用当前外观应恢复默认")
             set_enabled(manager, "example-sleepy-mushroom", true)
-            find_control(manager, "CloseManager").emit_signal("pressed")
+            manager.emit_signal("close_requested")
             check(not manager.visible, "关闭管理器不应退出桌宠")
             main.queue_free()
             await process_frame
@@ -152,14 +155,14 @@ func run_checks():
             check(find_control(manager, "RemoveConfirmation").visible, "卸载前应显示确认")
             find_control(manager, "RemoveConfirmation").emit_signal("confirmed")
             find_control(manager, "RemoveConfirmation").hide()
-            check(find_control(manager, "ModList").get_child_count() == 3, "确认卸载后应移出列表")
+            check(find_control(manager, "ModList").get_child_count() == 2, "确认卸载后应移出列表")
             check(main.get_child(0).get("DisplayName") == "蘑菇", "卸载当前外观应恢复默认")
         find_control(manager, "ImportPicker").emit_signal("file_selected", package_path + ".missing")
         deadline = Time.get_ticks_msec() + 10000
         while find_control(manager, "ImportMod").disabled and Time.get_ticks_msec() < deadline:
             await process_frame
         check(find_control(manager, "ImportError").visible, "导入失败必须显示原因")
-        check(find_control(manager, "ModList").get_child_count() == 3, "失败导入不能改变列表")
+        check(find_control(manager, "ModList").get_child_count() == 2, "失败导入不能改变列表")
     if not package_path.is_empty() and not data_dir.is_empty():
         var transparent := transparent_package()
         await wait_import(manager, transparent)
@@ -184,7 +187,7 @@ func run_checks():
     else:
         set_enabled(manager, "official-mushroom", false)
     check(not main.get_child(0).visible, "全部外观关闭后桌宠应消失")
-    find_control(manager, "CloseManager").emit_signal("pressed")
+    manager.emit_signal("close_requested")
     await process_frame
     check(not manager.visible and is_instance_valid(main), "叉掉窗口应继续在后台运行")
     if DisplayServer.has_feature(DisplayServer.FEATURE_STATUS_INDICATOR):

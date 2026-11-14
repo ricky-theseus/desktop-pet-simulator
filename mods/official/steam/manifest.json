@@ -1,9 +1,0 @@
-{
-  "formatVersion": 1,
-  "id": "official-steam",
-  "name": "Steam 连接",
-  "version": "0.1.0",
-  "apiVersion": "1.0",
-  "kind": "builtin",
-  "permissions": ["steam.read", "workshop.read"]
-}

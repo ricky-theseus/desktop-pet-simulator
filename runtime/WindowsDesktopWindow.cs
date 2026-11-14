@@ -14,10 +14,21 @@ internal static class WindowsDesktopWindow
     public static void ShowOwnedWindow(nint handle, nint owner)
     {
         if (!OperatingSystem.IsWindows()) return;
-        Marshal.SetLastPInvokeError(0);
-        var previous = SetWindowLongPtr(handle, WindowOwner, owner);
-        var error = Marshal.GetLastWin32Error();
-        if (previous == 0 && error != 0) throw new Win32Exception(error);
+        if (!IsWindow(handle)) throw new InvalidOperationException("管理窗口尚未创建：" + handle);
+        if (GetWindow(handle, 4) != owner)
+        {
+            Marshal.SetLastPInvokeError(0);
+            var previous = SetWindowLongPtr(handle, WindowOwner, owner);
+            var error = Marshal.GetLastWin32Error();
+            if (previous == 0 && error != 0) throw new Win32Exception(error);
+        }
+        if (owner == 0)
+        {
+            // 管理器不能归属置顶桌宠；独立工具窗口保留无任务栏行为及系统拖动。
+            var style = GetWindowLong(handle, ExtendedStyle);
+            if ((style & AppWindow) != 0 || (style & ToolWindow) == 0) HideTaskbarButton(handle);
+            SetWindowPos(handle, -2, 0, 0, 0, 0, 0x0013);
+        }
         // 隐藏启动参数可能覆盖 Godot 首次 ShowWindow；显式再次显示同步原生可见性。
         // 设置 owner 建立所属关系，避免管理器产生独立任务栏按钮。
         ShowWindow(handle, IsIconic(handle) ? 9 : 5);
@@ -45,5 +56,11 @@ internal static class WindowsDesktopWindow
     [DllImport("user32.dll")]
     private static extern bool IsIconic(nint handle);
     [DllImport("user32.dll")]
+    private static extern bool IsWindow(nint handle);
+    [DllImport("user32.dll")]
+    private static extern nint GetWindow(nint handle, uint command);
+    [DllImport("user32.dll")]
     private static extern bool ShowWindow(nint handle, int command);
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(nint handle, nint insertAfter, int x, int y, int width, int height, uint flags);
 }

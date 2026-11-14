@@ -1,6 +1,6 @@
 # 桌宠运行时
 
-当前运行时使用 Godot 4.5.1 Mono，窗口启用了无边框、置顶、逐像素透明和鼠标区域穿透。
+当前运行时使用 Godot 4.5.1 Mono，宠物窗口启用了无边框、置顶、逐像素透明和鼠标区域穿透。管理器是独立普通窗口，使用系统标题栏拖动和窗口边框缩放，不跟随宠物置顶。
 
 ## 基础交互
 
@@ -53,6 +53,6 @@ godot --headless --path runtime --script (Resolve-Path tests/runtime/pet_interac
 
 右键桌宠 → Mod 管理器。运行 `./tools/pack-example-mod.ps1` 生成示例 ZIP 后，可以导入并使用瞌睡蘑菇。首版支持外观数据包，尚不导入第三方可执行代码。格式和存储说明见 [管理契约 v1](../sdk/mod-management-v1.md)。
 
-启用内置 Steam Mod 不代表已经联网：当前 App ID 为 0，保持离线。有正式 ID 后按 [Steam 接入说明](../mods/official/steam/README.md) 配置和联调。
+公开构建仅提供离线平台服务。Steam 及其他发行实现不列入玩家 Mod 列表，也不读取玩家保存的发行开关。商业源码与配置由维护者保存在仓库外；构建时显式传入 `-p:PrivateDistributionTargets=<本地 targets 文件>` 接入。未传入时可独立编译；传入不存在的文件会报错，不静默回退。此路径仅用于本机构建，不保存到公开项目中。
 
-以下参数放在 Godot 参数分隔符 `--` 之后：`--open-mod-manager` 启动时打开管理器；`--safe-mode` 跳过外部外观和 Steam；`--mod-data-dir=<目录>` 使用独立数据目录，便于隔离测试。Windows 管理窗口从属于桌宠窗口；关闭管理器不退出桌宠。
+以下参数放在 Godot 参数分隔符 `--` 之后：`--open-mod-manager` 启动时打开管理器；`--safe-mode` 跳过外部外观并请求发行实现使用安全模式；`--mod-data-dir=<目录>` 使用独立数据目录，便于隔离测试。Windows 管理窗口独立于置顶宠物；关闭管理器不退出桌宠。

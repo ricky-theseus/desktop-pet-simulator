@@ -8,13 +8,10 @@
   <ItemGroup>
     <ProjectReference Include="..\core\DesktopPet.Core\DesktopPet.Core.csproj" />
     <ProjectReference Include="..\mods\official\mushroom\DesktopPet.OfficialMushroom.csproj" />
-    <ProjectReference Include="..\mods\official\steam\DesktopPet.OfficialSteam.csproj" />
     <Compile Include="..\mods\official\mod-manager\*.cs" Link="OfficialMods\ModManager\%(Filename)%(Extension)" />
   </ItemGroup>
-  <ItemGroup Condition="'$(SteamworksNativeLibrary)' != '' and Exists('$(SteamworksNativeLibrary)')">
-    <Content Include="$(SteamworksNativeLibrary)" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-  </ItemGroup>
-  <Target Name="CheckSteamworksNativeLibrary" BeforeTargets="BeforeBuild" Condition="'$(SteamworksNativeLibrary)' != '' and !Exists('$(SteamworksNativeLibrary)')">
-    <Error Text="SteamworksNativeLibrary 指定的原生运行库不存在。" />
+  <Import Project="$(PrivateDistributionTargets)" Condition="'$(PrivateDistributionTargets)' != '' and Exists('$(PrivateDistributionTargets)')" />
+  <Target Name="CheckPrivateDistributionTargets" BeforeTargets="BeforeBuild" Condition="'$(PrivateDistributionTargets)' != '' and !Exists('$(PrivateDistributionTargets)')">
+    <Error Text="指定的本地发行构建文件不存在。" />
   </Target>
 </Project>

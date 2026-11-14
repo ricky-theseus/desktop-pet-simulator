@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+list_paths() {
+    if [ "${1:---index}" = '--index' ]; then
+        git ls-files --cached -z
+    elif [ "$1" = '--stdin' ]; then
+        cat
+    else
+        git ls-tree -r --name-only -z "$1"
+    fi
+}
+list_paths "${1:---index}" | {
+failed=0
+while IFS= read -r -d '' path; do
+    normalized=$(printf '%s' "$path" | tr '[:upper:]' '[:lower:]')
+    case "$normalized" in
+        private/*|commercial/*|distribution-private/*|*/private/*|*/commercial/*|mods/official/steam/*|*.private.*|*.local.*|*.dll|*.pdb|*.so|*.dylib|*.pck|*.zip|steam_appid.txt|*/steam_appid.txt)
+            printf '禁止进入公开仓库的文件：%s\n' "$path" >&2
+            failed=1
+            ;;
+        .env|*/.env)
+            printf '禁止提交本地环境配置：%s\n' "$path" >&2
+            failed=1
+            ;;
+    esac
+done
+exit "$failed"
+}
