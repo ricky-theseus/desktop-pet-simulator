@@ -34,4 +34,8 @@ steam-build/
 *.suo
 .DS_Store
 Thumbs.db
+steam_appid.txt
+steam_api64.dll
+libsteam_api.dylib
+libsteam_api.so
 

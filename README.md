@@ -9,7 +9,7 @@ Core 只保留宠物运行时和平台最小基础设施；外观、性格、玩
 
 ## 当前状态
 
-仓库目前处于第一阶段实现，包含 Core / SDK / Mod / Skill 的目录边界、仓库开发规范、官方蘑菇 Mod、Agent Mod 开发 Skill 占位结构，以及 Core 契约测试入口。当前桌面渲染工程正在接入 Godot 4 .NET。
+仓库目前处于第一阶段实现，Godot 4 .NET 桌宠已支持透明窗口、动作交互与外观切换。内置官方蘑菇、Mod 管理器和 Steam 接入 Mod；本地外观包可离线导入、启停、切换与卸载。Steam 尚未配置正式 App ID，在线功能待联调。
 
 ## 核心关系
 
@@ -23,10 +23,8 @@ Core Runtime
 
 Official Mods
 ├── official-mushroom
-├── official-agent-bridge
-├── official-desktop-interaction
-├── official-ui-shell
-└── official-workshop
+├── official-mod-manager
+└── official-steam
 
 Skills
 ├── mod-authoring

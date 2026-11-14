@@ -1,0 +1,14 @@
+{
+  "formatVersion": 1,
+  "id": "example-sleepy-mushroom",
+  "displayName": "瞌睡蘑菇",
+  "frameSize": 64,
+  "frames": ["01.png", "02.png", "03.png", "04.png", "05.png", "06.png", "07.png", "08.png"],
+  "actions": {
+    "idle": { "frames": [1,1,1,1,1,1,0,0], "fps": 2, "loop": true },
+    "pet": { "frames": [2,2,1,2,2,1], "fps": 6, "loop": false },
+    "eat": { "frames": [3,4,3,4], "fps": 4, "loop": false },
+    "held": { "frames": [5,6], "fps": 2, "loop": true },
+    "land": { "frames": [7,7,1], "fps": 6, "loop": false }
+  }
+}

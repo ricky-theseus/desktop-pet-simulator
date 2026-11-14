@@ -7,6 +7,7 @@
 - 左键点击松开：增加好感度并播放摸摸动作。按住移动至少 6px 后进入提起状态，拖动松开播放落地动作；拖动不会增加好感度。
 - 右键点击蘑菇：在角色右侧打开独立菜单；右侧空间不足时切到左侧，并避开任务栏。
 - 喂蘑菇：恢复饱腹度并触发开心反馈。
+- Mod 管理器：打开独立管理窗口，导入外观 ZIP、启用/禁用、即时换装和卸载；另有 Steam 状态与订阅入口。
 - 回到屏幕中央：把桌宠窗口移动到当前屏幕的可用区域中央。
 - 退出桌宠：关闭运行时。
 
@@ -46,3 +47,11 @@ godot --headless --path runtime --script (Resolve-Path tests/runtime/pet_interac
 ```
 
 去掉 `--headless` 并追加 `-- --capture-dir=<已存在的输出目录>`，可保存引擎渲染的待机、摸摸、进食、提起、落地截图。外观配置和新增形象的方法见 `sdk/appearance-v1.md`。
+
+## Mod 管理器
+
+右键桌宠 → Mod 管理器。运行 `./tools/pack-example-mod.ps1` 生成示例 ZIP 后，可以导入并使用瞌睡蘑菇。首版支持外观数据包，尚不导入第三方可执行代码。格式和存储说明见 [管理契约 v1](../sdk/mod-management-v1.md)。
+
+启用内置 Steam Mod 不代表已经联网：当前 App ID 为 0，保持离线。有正式 ID 后按 [Steam 接入说明](../mods/official/steam/README.md) 配置和联调。
+
+以下参数放在 Godot 参数分隔符 `--` 之后：`--open-mod-manager` 启动时打开管理器；`--safe-mode` 跳过外部外观和 Steam；`--mod-data-dir=<目录>` 使用独立数据目录，便于隔离测试。Windows 管理窗口从属于桌宠窗口；关闭管理器不退出桌宠。

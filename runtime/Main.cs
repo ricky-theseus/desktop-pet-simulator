@@ -1,15 +1,21 @@
 using DesktopPet.Core;
 using DesktopPet.OfficialMushroom;
+using DesktopPet.OfficialModManager;
+using DesktopPet.OfficialSteam;
 using Godot;
 
 namespace DesktopPet.Runtime;
 
-public partial class Main : Node2D
+public partial class Main : Node2D, IPetAppearanceService
 {
+    public string ApiVersion => "1.0";
     private const int FeedAction = 1;
     private const int PetAction = 2;
     private const int CenterAction = 3;
     private const int QuitAction = 4;
+    private const int ModsAction = 5;
+    private ModManagerMod? modManager;
+    private SteamMod? steam;
 
     private PetView? pet;
     private readonly MushroomPetState petState = new();
@@ -40,18 +46,40 @@ public partial class Main : Node2D
         }
         GetWindow().FocusExited += CancelPointer;
 
-        host = new ModHost(new ModHostOptions("1.0"));
+        var arguments = OS.GetCmdlineUserArgs();
+        var safeMode = arguments.Contains("--safe-mode");
+        var dataDirectory = arguments.FirstOrDefault(arg => arg.StartsWith("--mod-data-dir="))?[15..]
+            ?? System.IO.Path.Combine(OS.GetUserDataDir(), "mod-platform");
+        var management = new ModManagementService(dataDirectory, [
+            new("official-mushroom", "默认蘑菇", "0.1.0", "初始蘑菇形象，带有待机、摸摸、进食、提起和落地动作。也作为其他外观无法加载时的恢复形象。", true),
+            new("official-mod-manager", "Mod 管理器", "0.1.0", "导入、启用和管理本地 Mod。此管理入口始终保留，方便恢复桌宠。", true),
+            new("official-steam", "Steam 连接", "0.1.0", "连接 Steam 账号并读取创意工坊订阅。当前未配置正式 App ID 时保持离线。启用状态在重启后生效。", false)
+        ]);
+        var services = new ServiceRegistry();
+        services.Add<IModManagementService>(management);
+        services.Add<IPetAppearanceService>(this);
+        host = new ModHost(new ModHostOptions("1.0"), services);
         var mushroom = new MushroomMod();
         host.Register(mushroom);
-        host.StartAll();
+        steam = new SteamMod((uint)ProjectSettings.GetSetting("desktop_pet/steam_app_id", 0).AsInt64());
+        services.Add<ISteamService>(steam);
+        if (!safeMode && management.List().Any(mod => mod.Id == "official-steam" && mod.Enabled)) host.Register(steam);
 
         pet = new PetView { Position = PetOffset };
         AddChild(pet);
-        pet.LoadAppearance(ProjectSettings.GetSetting("desktop_pet/appearance", "res://assets/mushroom/appearance.json").AsString());
+        try { ApplyAppearance(safeMode ? null : management.SelectedAppearancePath); }
+        catch (Exception exception)
+        {
+            GD.PushWarning("外观加载失败，已恢复默认蘑菇：" + exception.Message);
+            ApplyAppearance(null);
+            management.SelectAppearance(null);
+        }
 
         menu = new PopupMenu { Theme = CreateMenuTheme() };
         menu.AddItem($"喂{pet.DisplayName}", FeedAction);
         menu.AddItem($"摸摸{pet.DisplayName}", PetAction);
+        menu.AddSeparator();
+        menu.AddItem("Mod 管理器…", ModsAction);
         menu.AddSeparator();
         menu.AddItem("回到屏幕中央", CenterAction);
         menu.AddItem("退出桌宠", QuitAction);
@@ -65,11 +93,27 @@ public partial class Main : Node2D
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
         AddChild(feedback);
+        modManager = new ModManagerMod(this);
+        host.Register(modManager);
+        host.StartAll();
+        if (arguments.Contains("--open-mod-manager")) modManager.Show();
+        RefreshMousePassthrough();
+    }
+
+    public void ApplyAppearance(string? path)
+    {
+        pet?.LoadAppearance(path ?? "res://assets/mushroom/appearance.json");
+        if (menu is not null && pet is not null)
+        {
+            menu.SetItemText(menu.GetItemIndex(FeedAction), $"喂{pet.DisplayName}");
+            menu.SetItemText(menu.GetItemIndex(PetAction), $"摸摸{pet.DisplayName}");
+        }
         RefreshMousePassthrough();
     }
 
     public override void _Process(double delta)
     {
+        steam?.Tick();
         petState.Tick((float)delta);
         if (feedback is null || !feedback.Visible)
         {
@@ -176,6 +220,9 @@ public partial class Main : Node2D
 
         switch (action)
         {
+            case ModsAction:
+                modManager?.Show();
+                break;
             case FeedAction:
                 petState.Feed();
                 pet.Play("eat");

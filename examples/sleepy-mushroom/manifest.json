@@ -1,0 +1,12 @@
+{
+  "formatVersion": 1,
+  "id": "example-sleepy-mushroom",
+  "name": "瞌睡蘑菇 · 示例",
+  "description": "复用官方蘑菇素材的外观示例。闭眼等待、慢慢眨眼，演示如何通过动作配置改变桌宠的表现。",
+  "version": "1.0.0",
+  "apiVersion": "1.0",
+  "kind": "appearance",
+  "entry": "appearance.json",
+  "dependencies": [],
+  "permissions": []
+}
