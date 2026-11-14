@@ -67,6 +67,7 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
         var services = new ServiceRegistry();
         services.Add<IPetAppearanceService>(this);
         services.Add<IPetVisualService>(this);
+        ConfigureModServices(services);
         host = new ModHost(new ModHostOptions("1.0"), services);
         services.Add<IModRuntimeService>(host);
         ConfigureLocalMods(builtIns, services, host, safeMode);
@@ -286,6 +287,13 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
 
     private void OnMenuItemPressed(long action)
     {
+        try { if (modMenu.Invoke((int)action)) return; }
+        catch (Exception error)
+        {
+            GD.PushWarning("Mod 菜单操作失败：" + error.Message);
+            ShowFeedback("暂时无法打开，请重试");
+            return;
+        }
         if (pet is null)
         {
             return;
