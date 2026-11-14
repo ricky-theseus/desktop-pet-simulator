@@ -175,6 +175,135 @@ public sealed class ModManagementTests : IDisposable
         Assert.Equal("res://mushroom.json", Create().SelectedAppearancePath);
     }
 
+    [Fact]
+    public void RuntimeStateTracksImmediateStopAndRestart()
+    {
+        var (service, host, mod) = ManagedRuntime(true);
+        Assert.True(service.List().Single().Running);
+
+        service.SetEnabled("test-code", false);
+        Assert.False(mod.Active);
+        Assert.False(service.List().Single().Running);
+        Assert.False(RuntimeService().List().Single().Enabled);
+        service.SetEnabled("test-code", true);
+        Assert.True(mod.Active);
+        Assert.True(service.List().Single().Running);
+        Assert.True(RuntimeService().List().Single().Enabled);
+        host.StopAll();
+        Assert.True(service.List().Single().Enabled);
+        Assert.False(service.List().Single().Running);
+    }
+
+    [Fact]
+    public void DisabledCodeModIsNotStartedInNextSession()
+    {
+        RuntimeService().SetEnabled("test-code", false);
+        var host = new ModHost(new ModHostOptions("1.0"));
+        var mod = new RuntimeMod();
+        host.Register(mod);
+        var service = RuntimeService(host);
+        host.StartAll(id => service.List().Single(item => item.Id == id).Enabled);
+
+        Assert.False(mod.Active);
+        Assert.False(service.List().Single().Running);
+        service.SetEnabled("test-code", true);
+        Assert.True(mod.Active);
+        host.StopAll();
+    }
+
+    [Fact]
+    public void FailedStartCleansResourcesWithoutPersistingEnable()
+    {
+        var (service, host, mod) = ManagedRuntime(false);
+        mod.FailStart = true;
+
+        var error = Assert.Throws<ModManagementException>(() => service.SetEnabled("test-code", true));
+
+        Assert.Equal("mod.lifecycle", error.Code);
+        Assert.Contains("start failure", error.Message);
+        Assert.False(mod.Active);
+        Assert.False(service.List().Single().Enabled);
+        Assert.False(RuntimeService().List().Single().Enabled);
+        Assert.False(host.IsRunning("test-code"));
+        host.StopAll();
+    }
+
+    [Fact]
+    public void FailedStopDoesNotPersistDisable()
+    {
+        var (service, host, mod) = ManagedRuntime(true);
+        mod.FailStop = true;
+
+        var error = Assert.Throws<ModManagementException>(() => service.SetEnabled("test-code", false));
+
+        Assert.Equal("mod.lifecycle", error.Code);
+        Assert.Contains("stop failure", error.Message);
+        Assert.True(service.List().Single().Enabled);
+        Assert.True(RuntimeService().List().Single().Enabled);
+        Assert.True(host.IsRunning("test-code"));
+        mod.FailStop = false;
+        host.StopAll();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SaveFailureRestoresPreviousRuntimeAndSettings(bool initiallyEnabled)
+    {
+        var (service, host, mod) = ManagedRuntime(initiallyEnabled);
+        var originalState = File.ReadAllText(Path.Combine(root, "mods-state.json"));
+        Directory.CreateDirectory(Path.Combine(root, "mods-state.json.tmp"));
+
+        var error = Record.Exception(() => service.SetEnabled("test-code", !initiallyEnabled));
+
+        Assert.True(error is IOException or UnauthorizedAccessException);
+        Assert.Equal(initiallyEnabled, mod.Active);
+        Assert.Equal(initiallyEnabled, host.IsRunning("test-code"));
+        Assert.Equal(initiallyEnabled, service.List().Single().Enabled);
+        Assert.Equal(initiallyEnabled, RuntimeService().List().Single().Enabled);
+        Assert.Equal(originalState, File.ReadAllText(Path.Combine(root, "mods-state.json")));
+        Assert.Equal(initiallyEnabled ? ["start", "stop", "start"] : ["start", "stop"], mod.Events);
+        host.StopAll();
+    }
+
+    private ModManagementService RuntimeService(IModRuntimeService? runtime = null) => new(root,
+        [new BuiltInMod("test-code", "测试代码 Mod", "1.0", "", false)], runtime);
+
+    private (ModManagementService Service, ModHost Host, RuntimeMod Mod) ManagedRuntime(bool enabled)
+    {
+        RuntimeService().SetEnabled("test-code", enabled);
+        var host = new ModHost(new ModHostOptions("1.0"));
+        var mod = new RuntimeMod();
+        host.Register(mod);
+        var service = RuntimeService(host);
+        Assert.False(service.List().Single().Running);
+        host.StartAll(id => service.List().Single(item => item.Id == id).Enabled);
+        return (service, host, mod);
+    }
+
+    private sealed class RuntimeMod : IMod
+    {
+        public ModManifest Manifest { get; } = new("test-code", "测试代码 Mod", "1.0", "1.0");
+        public List<string> Events { get; } = [];
+        public bool Active { get; private set; }
+        public bool FailStart { get; set; }
+        public bool FailStop { get; set; }
+
+        public void Start(ModContext context)
+        {
+            Events.Add("start");
+            Active = true;
+            if (FailStart) throw new InvalidOperationException("start failure");
+        }
+
+        public void Stop(ModContext context)
+        {
+            Events.Add("stop");
+            if (FailStop) throw new InvalidOperationException("stop failure");
+            Active = false;
+        }
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(root)) Directory.Delete(root, true);

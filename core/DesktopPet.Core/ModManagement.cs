@@ -40,7 +40,7 @@ public sealed class ContentModManifest
     public string[] Permissions { get; init; } = [];
 }
 
-/// <summary>本地内容包管理 v1。调用方串行调用；仅接受数据外观包，状态保存后才对外生效。</summary>
+/// <summary>本地内容包管理 v1。调用方串行调用；仅导入数据外观包，代码 Mod 由宿主运行服务管理。</summary>
 public sealed class ModManagementService : IModManagementService
 {
     private const long PackageLimit = 64 * 1024 * 1024;
@@ -49,18 +49,20 @@ public sealed class ModManagementService : IModManagementService
     private readonly string statePath;
     private readonly BuiltInMod[] builtIns;
     private readonly HashSet<string> initiallyEnabled;
+    private readonly IModRuntimeService? runtime;
     private Settings settings;
     public string ApiVersion => "1.0";
     public string ModsDirectory { get; }
     public string? SelectedAppearanceId => List().FirstOrDefault(mod => mod.AppearancePath is not null && mod.Running)?.Id;
     public string? SelectedAppearancePath => List().FirstOrDefault(mod => mod.AppearancePath is not null && mod.Running)?.AppearancePath;
 
-    public ModManagementService(string dataDirectory, IEnumerable<BuiltInMod> builtIns)
+    public ModManagementService(string dataDirectory, IEnumerable<BuiltInMod> builtIns, IModRuntimeService? runtime = null)
     {
         root = Path.GetFullPath(dataDirectory);
         ModsDirectory = Path.Combine(root, "mods");
         statePath = Path.Combine(root, "mods-state.json");
         this.builtIns = builtIns.ToArray();
+        this.runtime = runtime;
         Directory.CreateDirectory(ModsDirectory);
         try
         {
@@ -81,7 +83,7 @@ public sealed class ModManagementService : IModManagementService
     {
         var manifests = new Dictionary<string, ContentModManifest>();
         var result = builtIns.Select(mod => new ManagedMod(mod.Id, mod.Name, mod.Version, mod.Description, "内置",
-            mod.Required || !settings.Disabled.Contains(mod.Id), initiallyEnabled.Contains(mod.Id), mod.Required, null, mod.AppearancePath)).ToList();
+            mod.Required || !settings.Disabled.Contains(mod.Id), runtime?.IsRunning(mod.Id) ?? initiallyEnabled.Contains(mod.Id), mod.Required, null, mod.AppearancePath)).ToList();
         foreach (var directory in Directory.GetDirectories(ModsDirectory).Order())
         {
             try
@@ -212,8 +214,30 @@ public sealed class ModManagementService : IModManagementService
         if (!enabled) EnsureNoDependents(id);
         var disabled = new HashSet<string>(settings.Disabled);
         if (enabled) disabled.Remove(id); else disabled.Add(id);
-        Save(disabled, enabled && target.AppearancePath is not null ? id :
-            !enabled && settings.SelectedAppearance == id ? null : settings.SelectedAppearance);
+        var controlsRuntime = runtime?.Contains(id) == true;
+        var wasRunning = controlsRuntime && runtime!.IsRunning(id);
+        if (controlsRuntime)
+        {
+            try { runtime!.SetEnabled(id, enabled); }
+            catch (Exception exception) { throw Error("mod.lifecycle", exception.Message); }
+        }
+        try
+        {
+            Save(disabled, enabled && target.AppearancePath is not null ? id :
+                !enabled && settings.SelectedAppearance == id ? null : settings.SelectedAppearance);
+        }
+        catch (Exception saveError)
+        {
+            if (controlsRuntime)
+            {
+                try { runtime!.SetEnabled(id, wasRunning); }
+                catch (Exception rollbackError)
+                {
+                    throw Error("mod.rollback", $"保存 Mod“{target.Name}”的设置失败：{saveError.Message}；恢复原运行状态也失败：{rollbackError.Message}");
+                }
+            }
+            throw;
+        }
     }
 
     public void SelectAppearance(string? id)

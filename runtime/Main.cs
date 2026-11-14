@@ -5,9 +5,17 @@ using Godot;
 
 namespace DesktopPet.Runtime;
 
-public partial class Main : Node2D, IPetAppearanceService
+public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
 {
     public string ApiVersion => "1.0";
+    bool IPetVisualService.IsVisible => pet?.Visible == true;
+    public bool CanPose => pet?.Visible == true && pet.Action == "idle" && !pointerDown && menu?.Visible != true;
+
+    public void SetPose(PetVisualPose pose)
+    {
+        if (!pose.IsValid) throw new ArgumentOutOfRangeException(nameof(pose));
+        if (pet?.SetPose(CanPose ? pose : PetVisualPose.Neutral) == true) RefreshMousePassthrough();
+    }
     private const int FeedAction = 1;
     private const int PetAction = 2;
     private const int CenterAction = 3;
@@ -52,16 +60,20 @@ public partial class Main : Node2D, IPetAppearanceService
         var safeMode = arguments.Contains("--safe-mode");
         var dataDirectory = arguments.FirstOrDefault(arg => arg.StartsWith("--mod-data-dir="))?[15..]
             ?? System.IO.Path.Combine(OS.GetUserDataDir(), "mod-platform");
-        var management = new ModManagementService(dataDirectory, [
+        var builtIns = new List<BuiltInMod> {
             new("official-mushroom", "默认蘑菇", "0.1.0", "初始蘑菇形象，带有待机、摸摸、进食、提起和落地动作，可关闭或替换。", false, DefaultAppearance),
             new("official-mod-manager", "Mod 管理器", "0.1.0", "导入、启用和管理本地 Mod。此管理入口始终保留，方便恢复桌宠。", true)
-        ]);
+        };
         var services = new ServiceRegistry();
-        services.Add<IModManagementService>(management);
         services.Add<IPetAppearanceService>(this);
+        services.Add<IPetVisualService>(this);
         host = new ModHost(new ModHostOptions("1.0"), services);
+        services.Add<IModRuntimeService>(host);
+        ConfigureLocalMods(builtIns, services, host, safeMode);
+        var management = new ModManagementService(dataDirectory, builtIns, host);
+        services.Add<IModManagementService>(management);
         var mushroom = new MushroomMod();
-        if (management.List().Any(mod => mod.Id == "official-mushroom" && mod.Enabled)) host.Register(mushroom);
+        host.Register(mushroom);
         services.Add<ISteamService>(new OfflineSteamService());
         ConfigureDistribution(services, host, safeMode);
 
@@ -101,7 +113,8 @@ public partial class Main : Node2D, IPetAppearanceService
         AddChild(feedback);
         modManager = new ModManagerMod(this, PresentModWindow);
         host.Register(modManager);
-        host.StartAll();
+        var enabledMods = management.List().ToDictionary(mod => mod.Id, mod => mod.Enabled);
+        host.StartAll(id => !enabledMods.TryGetValue(id, out var enabled) || enabled);
         CreateTray();
         if (arguments.Contains("--open-mod-manager") || failedAppearance) modManager.Show();
         RefreshMousePassthrough();
@@ -135,6 +148,7 @@ public partial class Main : Node2D, IPetAppearanceService
 
     // 发行实现由显式构建选项接入；公共构建没有实现时，此调用在编译时移除。
     partial void ConfigureDistribution(ServiceRegistry services, ModHost modHost, bool safeMode);
+    partial void ConfigureLocalMods(List<BuiltInMod> builtIns, ServiceRegistry services, ModHost modHost, bool safeMode);
 
     private static void PresentModWindow(Window window)
     {

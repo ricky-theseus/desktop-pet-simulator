@@ -10,10 +10,23 @@ public partial class PetView : Node2D
     private Texture2D[] textures = [];
     private bool ownsTextures;
     private PetAnimationTimeline? timeline;
+    private Vector2[] baseHitPolygon = [];
+    private float baseScale = 1f;
+    private static readonly Vector2 Anchor = new(96, 152);
+    private PetVisualPose currentPose = PetVisualPose.Neutral;
     public string Action => timeline?.Action ?? "idle";
     public string DisplayName { get; private set; } = "宠物";
     public Vector2[] HitPolygon { get; private set; } = [];
-    public Rect2 InteractionRect => new(30f, 20f, 132f, 148f);
+    public Rect2 InteractionRect
+    {
+        get
+        {
+            if (HitPolygon.Length == 0) return default;
+            var bounds = new Rect2(HitPolygon[0], Vector2.Zero);
+            foreach (var point in HitPolygon) bounds = bounds.Expand(point);
+            return bounds;
+        }
+    }
 
     public override void _Ready()
     {
@@ -47,7 +60,7 @@ public partial class PetView : Node2D
                 using var pixels = texture.GetImage();
                 bitmap.CreateFromImageAlpha(pixels, 0.5f);
                 foreach (var polygon in bitmap.OpaqueToPolygons(new Rect2I(0, 0, definition.FrameSize, definition.FrameSize)))
-                    outline.AddRange(polygon.Select(point => sprite.Position + (point + offset) * scale));
+                    outline.AddRange(polygon.Select(point => Anchor + (point + offset) * scale));
             }
             if (outline.Count == 0) throw new InvalidOperationException("Appearance contains no visible pixels.");
 
@@ -56,12 +69,14 @@ public partial class PetView : Node2D
             var releasePrevious = ownsTextures;
             textures = loaded.ToArray();
             ownsTextures = external;
-            HitPolygon = Geometry2D.ConvexHull(outline.ToArray());
+            baseHitPolygon = Geometry2D.ConvexHull(outline.ToArray());
+            baseScale = scale;
             DisplayName = definition.DisplayName;
             timeline = new PetAnimationTimeline(definition);
             sprite.Offset = offset;
             sprite.Scale = Vector2.One * scale;
             sprite.Texture = textures[timeline.FrameIndex];
+            SetPose(PetVisualPose.Neutral);
             if (releasePrevious)
                 foreach (var texture in previous) texture.Dispose();
         }
@@ -85,6 +100,8 @@ public partial class PetView : Node2D
         sprite.Texture = null;
         timeline = null;
         HitPolygon = [];
+        baseHitPolygon = [];
+        SetPose(PetVisualPose.Neutral);
         if (ownsTextures)
             foreach (var texture in textures) texture.Dispose();
         textures = [];
@@ -103,8 +120,22 @@ public partial class PetView : Node2D
 
     public void Play(string action)
     {
+        SetPose(PetVisualPose.Neutral);
         timeline?.Play(action);
         if (timeline is not null) sprite.Texture = textures[timeline.FrameIndex];
+    }
+
+    public bool SetPose(PetVisualPose pose)
+    {
+        if (!pose.IsValid) throw new ArgumentOutOfRangeException(nameof(pose));
+        var changed = currentPose != pose;
+        currentPose = pose;
+        var transform = new Transform2D(pose.Rotation, new Vector2(pose.ScaleX, pose.ScaleY),
+            pose.Skew, Anchor + new Vector2(pose.X, pose.Y) * 128);
+        sprite.Transform = new Transform2D(pose.Rotation, new Vector2(pose.ScaleX, pose.ScaleY) * baseScale,
+            pose.Skew, transform.Origin);
+        HitPolygon = baseHitPolygon.Select(point => transform * (point - Anchor)).ToArray();
+        return changed;
     }
 
     public override void _Process(double delta)

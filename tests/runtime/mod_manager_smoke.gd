@@ -99,7 +99,8 @@ func run_checks():
     main.get_child(1).emit_signal("id_pressed", 5)
     await process_frame
     check(manager.visible, "右键菜单应打开管理器")
-    check(find_control(manager, "ModList").get_child_count() == 2, "玩家列表只包含默认外观和管理器")
+    var built_in_count = find_control(manager, "ModList").get_child_count()
+    check(built_in_count >= 2, "玩家列表应包含默认外观和管理器")
     check(row_for(manager, "official-steam") == null, "发行接入不属于玩家可管理 Mod")
     if DisplayServer.get_name() != "headless":
         check(not manager.borderless and not manager.transient and not manager.always_on_top, "管理器应是独立普通窗口")
@@ -130,7 +131,7 @@ func run_checks():
         var deadline := Time.get_ticks_msec() + 10000
         while find_control(manager, "ImportMod").disabled and Time.get_ticks_msec() < deadline:
             await process_frame
-        check(find_control(manager, "ModList").get_child_count() == 3, "ZIP 导入后应出现第三个 Mod")
+        check(find_control(manager, "ModList").get_child_count() == built_in_count + 1, "ZIP 导入后应新增一个 Mod")
         if row_for(manager, "example-sleepy-mushroom") != null:
             act(manager, "example-sleepy-mushroom", 1)
             check(main.get_child(0).get("DisplayName") == "瞌睡蘑菇", "导入的原始 PNG 应能即时显示")
@@ -155,14 +156,14 @@ func run_checks():
             check(find_control(manager, "RemoveConfirmation").visible, "卸载前应显示确认")
             find_control(manager, "RemoveConfirmation").emit_signal("confirmed")
             find_control(manager, "RemoveConfirmation").hide()
-            check(find_control(manager, "ModList").get_child_count() == 2, "确认卸载后应移出列表")
+            check(find_control(manager, "ModList").get_child_count() == built_in_count, "确认卸载后应移出列表")
             check(main.get_child(0).get("DisplayName") == "蘑菇", "卸载当前外观应恢复默认")
         find_control(manager, "ImportPicker").emit_signal("file_selected", package_path + ".missing")
         deadline = Time.get_ticks_msec() + 10000
         while find_control(manager, "ImportMod").disabled and Time.get_ticks_msec() < deadline:
             await process_frame
         check(find_control(manager, "ImportError").visible, "导入失败必须显示原因")
-        check(find_control(manager, "ModList").get_child_count() == 2, "失败导入不能改变列表")
+        check(find_control(manager, "ModList").get_child_count() == built_in_count, "失败导入不能改变列表")
     if not package_path.is_empty() and not data_dir.is_empty():
         var transparent := transparent_package()
         await wait_import(manager, transparent)
