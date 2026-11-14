@@ -5,7 +5,6 @@ namespace DesktopPet.Runtime;
 
 public partial class MushroomPet : Node2D
 {
-    private static readonly Color Shadow = new("#302339");
     private Sprite2D? sprite;
 
     public MushroomPetState State { get; } = new();
@@ -39,12 +38,5 @@ public partial class MushroomPet : Node2D
             var bob = Mathf.Round(Mathf.Sin(State.IdleTime * 3.2f) * 2f - State.BounceEnergy * 3f);
             sprite.Position = new Vector2(96f, 88f + bob);
         }
-
-        QueueRedraw();
-    }
-
-    public override void _Draw()
-    {
-        DrawRect(new Rect2(42f, 165f, 108f, 7f), new Color(Shadow, 0.25f));
     }
 }
