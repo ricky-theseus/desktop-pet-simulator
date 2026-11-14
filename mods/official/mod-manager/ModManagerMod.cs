@@ -4,7 +4,7 @@ using Godot;
 namespace DesktopPet.OfficialModManager;
 
 /// <summary>官方管理界面；通过公开服务管理内容，窗口随 Mod 生命周期释放。</summary>
-public sealed class ModManagerMod(Node parent) : IMod
+public sealed class ModManagerMod(Node parent, Action<Window>? presentNativeWindow = null) : IMod
 {
     public ModManifest Manifest { get; } = new("official-mod-manager", "Mod 管理器", "0.1.0", "1.0");
     private IModManagementService management = null!;
@@ -192,6 +192,8 @@ public sealed class ModManagerMod(Node parent) : IMod
             window.Position = area.Position + (area.Size - window.Size) / 2;
             window.Show();
         }
+        if (window.Mode == Window.ModeEnum.Minimized) window.Mode = Window.ModeEnum.Windowed;
+        presentNativeWindow?.Invoke(window);
         window.GrabFocus();
     }
 

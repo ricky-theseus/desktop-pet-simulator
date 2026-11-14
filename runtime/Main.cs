@@ -93,11 +93,19 @@ public partial class Main : Node2D, IPetAppearanceService
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
         AddChild(feedback);
-        modManager = new ModManagerMod(this);
+        modManager = new ModManagerMod(this, PresentModWindow);
         host.Register(modManager);
         host.StartAll();
         if (arguments.Contains("--open-mod-manager")) modManager.Show();
         RefreshMousePassthrough();
+    }
+
+    private static void PresentModWindow(Window window)
+    {
+        if (!OperatingSystem.IsWindows() || DisplayServer.GetName() == "headless") return;
+        WindowsDesktopWindow.ShowOwnedWindow(
+            (nint)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle, window.GetWindowId()),
+            (nint)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle));
     }
 
     public void ApplyAppearance(string? path)
