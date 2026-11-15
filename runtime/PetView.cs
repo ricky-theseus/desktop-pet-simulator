@@ -93,7 +93,7 @@ public partial class PetView : Node2D
 
     public override void _ExitTree()
     {
-        animationLayer?.Dispose();
+        foreach (var layer in animationLayers.Values.ToArray()) layer.Dispose();
         if (ownsTextures)
             foreach (var texture in textures) texture.Dispose();
         textures = [];
@@ -146,12 +146,13 @@ public partial class PetView : Node2D
         var pose = currentPose;
         var transform = new Transform2D(pose.Rotation, new Vector2(pose.ScaleX, pose.ScaleY),
             pose.Skew, Anchor + new Vector2(pose.X, pose.Y) * 128);
-        var scale = presentedFrame is null ? baseScale : 128f / animationLayer!.Definition.FrameSize;
+        var scale = presentedLayer is null ? baseScale : 128f / presentedLayer.Definition.FrameSize;
         sprite.Transform = new Transform2D(pose.Rotation, new Vector2(pose.ScaleX, pose.ScaleY) * scale,
             pose.Skew, transform.Origin);
         HitPolygon = presentedFrame is null
             ? baseHitPolygon.Select(point => transform * (point - Anchor)).ToArray()
-            : presentedFrame.Outline.Select(point => sprite.Transform * FramePoint(point)).ToArray();
+            : presentedFrame.Outline.Select(point => sprite.Transform *
+                FramePoint(point, presentedLayer!.Definition.FrameSize, presentedLayer.MirrorX)).ToArray();
     }
 
     public override void _Process(double delta)

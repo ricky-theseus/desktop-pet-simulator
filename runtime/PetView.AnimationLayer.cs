@@ -5,29 +5,37 @@ namespace DesktopPet.Runtime;
 
 public partial class PetView
 {
-    private AnimationLayer? animationLayer;
+    private readonly Dictionary<int, AnimationLayer> animationLayers = [];
+    private AnimationLayer? presentedLayer;
     private LayerFrame? presentedFrame;
 
-    internal IPetAnimationLayer CreateAnimationLayer(string owner, string definitionPath, Func<bool> canPresent)
+    internal bool HasActiveAnimationLayer => animationLayers.Values.Any(layer => layer.IsActive);
+
+    internal IPetAnimationLayer CreateAnimationLayer(string owner, string definitionPath, int priority, Func<bool> canPresent)
     {
         if (string.IsNullOrWhiteSpace(owner) || owner.Length > 128 ||
             !char.IsAsciiLetterOrDigit(owner[0]) || owner.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not '-' and not '_' and not '.'))
             throw new ArgumentException("Owner must be a Mod identifier (letters, digits, '-', '_' or '.').", nameof(owner));
         ArgumentException.ThrowIfNullOrWhiteSpace(definitionPath);
-        if (animationLayer is not null) throw new InvalidOperationException("A pet animation layer is already leased.");
-        var loaded = AnimationLayer.Load(this, definitionPath, canPresent);
-        animationLayer = loaded;
+        if (priority is < -1000 or > 1000) throw new ArgumentOutOfRangeException(nameof(priority));
+        if (animationLayers.ContainsKey(priority)) throw new InvalidOperationException("This pet animation priority is already leased.");
+        var loaded = AnimationLayer.Load(this, definitionPath, priority, canPresent);
+        animationLayers.Add(priority, loaded);
         return loaded;
     }
 
     internal void RefreshAnimationPresentation()
     {
-        var next = animationLayer is { CurrentFrame: not null } layer && Visible &&
-            AppearanceId == layer.Definition.CompatibleAppearanceId && layer.CanPresent() ? layer.CurrentFrame : null;
-        var mirror = next is not null && animationLayer!.MirrorX;
-        var changed = presentedFrame != next || sprite.FlipH != mirror;
+        AnimationLayer? nextLayer = null;
+        foreach (var layer in animationLayers.Values)
+            if (layer.IsActive && layer.CanPresent() && (nextLayer is null || layer.Priority > nextLayer.Priority))
+                nextLayer = layer;
+        var next = nextLayer?.CurrentFrame;
+        var mirror = nextLayer?.MirrorX ?? false;
+        var changed = presentedLayer != nextLayer || presentedFrame != next || sprite.FlipH != mirror;
+        presentedLayer = nextLayer;
         presentedFrame = next;
-        var size = next is null ? baseFrameSize : animationLayer!.Definition.FrameSize;
+        var size = nextLayer?.Definition.FrameSize ?? baseFrameSize;
         sprite.Offset = new Vector2(-size / 2f, -size);
         sprite.FlipH = mirror;
         sprite.Texture = next?.Texture ?? (timeline is null ? null : textures[timeline.FrameIndex]);
@@ -37,19 +45,22 @@ public partial class PetView
     }
 
     // FlipH 翻转图片内容，不改变绘制矩形；挂点和轮廓须先在源图片宽度内镜像。
-    private Vector2 FramePoint(Vector2 point) => sprite.Offset +
-        new Vector2(sprite.FlipH ? animationLayer!.Definition.FrameSize - point.X : point.X, point.Y);
+    private Vector2 FramePoint(Vector2 point, int frameSize, bool mirrorX) => sprite.Offset +
+        new Vector2(mirrorX ? frameSize - point.X : point.X, point.Y);
 
     private sealed record LayerFrame(Texture2D Texture, Vector2[] Outline, Dictionary<string, PetAnimationAnchor> Anchors);
 
-    private sealed class AnimationLayer(PetView view, PetAnimationLayerDefinition definition, Func<bool> canPresent,
+    private sealed class AnimationLayer(PetView view, PetAnimationLayerDefinition definition, int priority, Func<bool> canPresent,
         Dictionary<string, LayerFrame> frames, List<Texture2D> ownedTextures) : IPetAnimationLayer
     {
         public PetAnimationLayerDefinition Definition { get; } = definition;
+        public int Priority { get; } = priority;
         public Func<bool> CanPresent { get; } = canPresent;
         public LayerFrame? CurrentFrame { get; private set; }
         public bool MirrorX { get; private set; }
         private bool disposed;
+        public bool IsActive => !disposed && CurrentFrame is not null && view.Visible &&
+            view.AppearanceId == Definition.CompatibleAppearanceId;
 
         public bool IsPresented
         {
@@ -57,7 +68,7 @@ public partial class PetView
             {
                 if (disposed) return false;
                 view.RefreshAnimationPresentation();
-                return CurrentFrame is not null && view.presentedFrame == CurrentFrame;
+                return view.presentedLayer == this;
             }
         }
 
@@ -75,7 +86,7 @@ public partial class PetView
         {
             position = default;
             if (!IsPresented || name is null || !CurrentFrame!.Anchors.TryGetValue(name, out var anchor)) return false;
-            var local = view.FramePoint(new Vector2(anchor.X, anchor.Y));
+            var local = view.FramePoint(new Vector2(anchor.X, anchor.Y), Definition.FrameSize, MirrorX);
             var point = view.sprite.GetViewportTransform() * view.sprite.GlobalTransform * local;
             point += (Vector2)DisplayServer.WindowGetPosition(view.GetWindow().GetWindowId());
             position = new PetAnchorPosition(point.X, point.Y);
@@ -86,7 +97,7 @@ public partial class PetView
         {
             if (disposed) return;
             disposed = true;
-            view.animationLayer = null;
+            view.animationLayers.Remove(Priority);
             view.RefreshAnimationPresentation();
             foreach (var texture in ownedTextures) texture.Dispose();
             ownedTextures.Clear();
@@ -94,7 +105,7 @@ public partial class PetView
             CurrentFrame = null;
         }
 
-        public static AnimationLayer Load(PetView view, string path, Func<bool> canPresent)
+        public static AnimationLayer Load(PetView view, string path, int priority, Func<bool> canPresent)
         {
             path = path.Replace('\\', '/');
             using var file = Godot.FileAccess.Open(path, Godot.FileAccess.ModeFlags.Read)
@@ -128,7 +139,7 @@ public partial class PetView
                     }
                     frames.Add(name, new LayerFrame(image.Texture, image.Outline, frame.Anchors));
                 }
-                return new AnimationLayer(view, definition, canPresent, frames, owned);
+                return new AnimationLayer(view, definition, priority, canPresent, frames, owned);
             }
             catch
             {

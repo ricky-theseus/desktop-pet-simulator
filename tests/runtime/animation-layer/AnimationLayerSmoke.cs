@@ -119,6 +119,7 @@ public partial class AnimationLayerSmoke : Node
             layer.Dispose();
             Check(next.IsPresented, "旧租约重复释放不影响新租约");
             next.Dispose();
+            TestPriorityLayers(main, pet, sprite, service, originalId!);
             var timelineAppearance = System.IO.Path.Combine(temporary, "timeline.json");
             System.IO.File.WriteAllText(timelineAppearance, JsonSerializer.Serialize(new {
                 formatVersion = 1, id = "timeline", displayName = "时间线检查", frameSize = 64,
@@ -137,8 +138,17 @@ public partial class AnimationLayerSmoke : Node
             pet._Process(.5);
             using (var currentPixels = sprite.Texture.GetImage())
                 Check(currentPixels.GetPixel(0, 0).A == 0, "基础时间线继续循环");
+            var exitLow = service.CreateLayer("exit-background", WriteDefinition("timeline"), -100);
+            var exitHigh = service.CreateLayer("exit-foreground", WriteDefinition("timeline"));
+            exitLow.SetFrame("pose_0");
+            exitHigh.SetFrame("pose_0");
             main.QueueFree();
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(!exitLow.IsPresented && !exitHigh.IsPresented, "退出宿主释放全部优先级租约");
+            exitLow.Dispose();
+            exitHigh.Dispose();
+            Throws<ObjectDisposedException>(() => exitLow.SetFrame("wide"), "退出后低层句柄不可写");
+            Throws<ObjectDisposedException>(() => exitHigh.SetFrame("wide"), "退出后高层句柄不可写");
         }
         catch (Exception error)
         {
@@ -151,6 +161,81 @@ public partial class AnimationLayerSmoke : Node
         }
         GD.Print($"Animation layer smoke: {(failures == 0 ? "PASS" : "FAIL")} ({failures} failures)");
         GetTree().Quit(failures == 0 ? 0 : 1);
+    }
+
+    private void TestPriorityLayers(Main main, PetView pet, Sprite2D sprite, IPetAnimationService service, string appearance)
+    {
+        var definition = WriteDefinition(appearance);
+        var backgroundDefinition = WriteDefinition(appearance, "large.png", "large.png", 128, 32, 96);
+        Check(!service.HasActiveLayer, "没有租约时不报告活动层");
+        Throws<ArgumentOutOfRangeException>(() => service.CreateLayer("invalid-low", definition, -1001), "拒绝过低优先级");
+        Throws<ArgumentOutOfRangeException>(() => service.CreateLayer("invalid-high", definition, 1001), "拒绝过高优先级");
+        using var background = service.CreateLayer("background", backgroundDefinition, -100);
+        Check(!service.HasActiveLayer, "未选帧租约不报告活动层");
+        background.SetFrame("pose_0");
+        Check(background.IsPresented && service.HasActiveLayer, "低优先级层可以独立显示");
+        Throws<InvalidOperationException>(() => service.CreateLayer("other-background", definition, -100), "同优先级仍独占");
+
+        foreach (var mirror in new[] { false, true })
+        {
+            using var foreground = service.CreateLayer("foreground", definition);
+            Check(background.IsPresented && !foreground.IsPresented, "高层未选帧不遮挡低层");
+            foreground.SetFrame("pose_0", mirror);
+            Check(foreground.IsPresented && !background.IsPresented, "优先级高者独占呈现");
+            Check(!background.TryGetAnchor("grip", out _), "隐藏低层不返回高层挂点");
+            Check(foreground.TryGetAnchor("grip", out var anchor), "高层返回自己的挂点");
+            CheckAnchor(anchor, mirror ? 50 : 142, 176, "高层使用自己的源尺寸和镜像");
+            var visibleTexture = sprite.Texture;
+            var visibleBounds = pet.InteractionRect;
+            background.SetFrame("wide", !mirror);
+            Check(sprite.Texture == visibleTexture && pet.InteractionRect == visibleBounds, "隐藏低层可以推进帧而不影响高层纹理和轮廓");
+            foreground.Dispose();
+            Check(background.IsPresented && sprite.Texture != visibleTexture && sprite.FlipH == !mirror, "高层释放立即恢复低层最新帧和镜像");
+            Check(!background.TryGetAnchor("grip", out _), "恢复隐藏期间选中的 wide 帧，不沿用先前 pose 帧的挂点");
+            background.SetFrame("pose_0", !mirror);
+            Check(background.TryGetAnchor("grip", out anchor), "恢复后低层挂点可用");
+            CheckAnchor(anchor, !mirror ? 128 : 64, 184, "恢复后挂点使用低层源尺寸");
+            Check(Math.Abs(pet.InteractionRect.Size.X - 128) < .01f, "恢复后按低层尺寸缩放轮廓");
+        }
+
+        using (var incompatible = service.CreateLayer("other-appearance", WriteDefinition("other-priority")))
+        {
+            incompatible.SetFrame("pose_0");
+            Check(background.IsPresented && !incompatible.IsPresented, "不兼容高层不遮挡兼容低层");
+            main.ApplyAppearance(WriteAppearance("other-priority"));
+            Check(incompatible.IsPresented && !background.IsPresented, "切换外观按各层兼容性重新选择");
+            main.ClearAppearance();
+            Check(!service.HasActiveLayer && !incompatible.IsPresented, "关闭外观不报告活动层");
+            main.ApplyAppearance(null);
+            Check(background.IsPresented, "重新启用兼容外观恢复低层");
+        }
+        using (var foreground = service.CreateLayer("interactive-foreground", definition))
+        {
+            foreground.SetFrame("pose_0");
+            var menu = main.GetChildren().OfType<PopupMenu>().First();
+            menu.EmitSignal(PopupMenu.SignalName.IdPressed, 1L);
+            Check(service.HasActiveLayer && !foreground.IsPresented && !background.IsPresented, "喂食暂停呈现但仍报告动作请求");
+            pet._Process(10);
+            Check(foreground.IsPresented && service.HasActiveLayer, "喂食结束恢复高层");
+            menu.Show();
+            Check(service.HasActiveLayer && !foreground.IsPresented, "菜单暂停不清除动作请求");
+            menu.Hide();
+            pet.Visible = false;
+            Check(!service.HasActiveLayer && !foreground.IsPresented, "宠物隐藏时不报告活动层");
+            pet.Visible = true;
+            Check(foreground.IsPresented, "宠物重新显示恢复最高层");
+            background.Dispose();
+            background.Dispose();
+            Check(foreground.IsPresented, "低层重复释放不影响高层");
+        }
+        Check(!service.HasActiveLayer, "所有层释放后活动请求结束");
+        using var minimum = service.CreateLayer("minimum", definition, -1000);
+        minimum.SetFrame("pose_0");
+        Throws<ArgumentException>(() => service.CreateLayer("bad-priority-frame", WriteDefinition(appearance, "pose.png", "wrong.png"), 1000), "全部资源加载失败不会占用优先级");
+        Check(minimum.IsPresented, "另一层加载失败不影响现有层");
+        using var maximum = service.CreateLayer("maximum", definition, 1000);
+        maximum.SetFrame("wide");
+        Check(maximum.IsPresented && !minimum.IsPresented, "优先级边界值可用且高值优先");
     }
 
     private void Check(bool condition, string message)
@@ -182,13 +267,14 @@ public partial class AnimationLayerSmoke : Node
             throw new InvalidOperationException("测试图片无法写入。");
     }
 
-    private string WriteDefinition(string appearance, string firstImage = "pose.png", string secondImage = "wide.png")
+    private string WriteDefinition(string appearance, string firstImage = "pose.png", string secondImage = "wide.png",
+        int frameSize = 64, int anchorX = 55, int anchorY = 44)
     {
         var path = System.IO.Path.Combine(temporary, Guid.NewGuid() + ".json");
         System.IO.File.WriteAllText(path, JsonSerializer.Serialize(new {
-            formatVersion = 1, compatibleAppearanceId = appearance, frameSize = 64,
+            formatVersion = 1, compatibleAppearanceId = appearance, frameSize,
             frames = new {
-                pose_0 = new { image = firstImage, anchors = new { grip = new { x = 55, y = 44 } } },
+                pose_0 = new { image = firstImage, anchors = new { grip = new { x = anchorX, y = anchorY } } },
                 wide = new { image = secondImage }
             }
         }));
