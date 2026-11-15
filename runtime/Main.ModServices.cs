@@ -22,6 +22,7 @@ public partial class Main : IPetScreenService
         services.Add<IPetMenuService>(modMenu);
         services.Add<IPetActivityService>(activities);
         services.Add<IPetScreenService>(this);
+        services.Add<IPetAnimationService>(this);
         modMenu.Changed += RefreshModMenu;
     }
 

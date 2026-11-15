@@ -7,6 +7,16 @@
 
 当前契约测试使用 .NET 8、xUnit 和 `dotnet test`；Godot 项目使用 Godot 4.5.1 Mono 进行无头加载校验。
 
+## 临时帧覆盖与挂点
+
+`PetAnimationLayerTests` 覆盖版本、相对路径、尺寸、帧数和有限挂点。独立运行时检查使用自动生成的临时 PNG，验证镜像、姿态变换、命中区域刷新、交互抢占、恢复、释放、换外观以及加载失败后继续申请：
+
+```powershell
+./tests/runtime/animation-layer/run.ps1 -GodotExecutable <Godot控制台程序> -WorkDirectory <仓库外的测试目录>
+```
+
+脚本将公共运行时构建到测试目录的 `public-build`，创建隔离项目并仅以 `--headless` 启动；不覆盖日常开发运行时或读取本地发行实现。真实 Windows 穿透裁剪仍需图形环境验证。
+
 ## Mod 管理流程
 
 `ModManagementTests` 覆盖安装、持久化、卸载、版本/权限/路径拒绝、依赖错误、配置损坏恢复和取消。`OfflineSteamServiceTests` 验证公开版本无需平台原生 SDK 即可读取离线状态；发行实现的测试留在本地私有目录。

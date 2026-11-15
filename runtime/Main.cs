@@ -80,6 +80,7 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
 
         pet = new PetView { Position = PetOffset };
         AddChild(pet);
+        pet.HitRegionChanged += RefreshMousePassthrough;
         var failedAppearance = false;
         try
         {
@@ -187,6 +188,7 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
     public override void _Process(double delta)
     {
         tickDistribution?.Invoke();
+        pet?.RefreshAnimationPresentation();
         if (pet?.Visible == true) petState.Tick((float)delta);
         if (feedback is null || !feedback.Visible)
         {
@@ -253,6 +255,7 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
                 menu.ResetSize();
                 PositionMenuBesidePet();
                 menu.Popup();
+                pet.RefreshAnimationPresentation();
             }
 
             GetViewport().SetInputAsHandled();
@@ -265,6 +268,7 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
         }
 
         pointerDown = true;
+        pet.RefreshAnimationPresentation();
         doubleClick = mouseButton.DoubleClick;
         grabOffset = (Vector2I)mouseButton.Position;
         pressScreen = DisplayServer.WindowGetPosition() + grabOffset;

@@ -11,3 +11,5 @@ SDK 的公共契约必须与 Core API 版本同步，并提供兼容矩阵。
 当前姿态、变形范围与交互优先规则见 [宠物视觉服务 v1](pet-visual-v1.md)。
 
 右键菜单命令、屏幕位置和独占活动协调见 [宠物扩展服务 v1](pet-extension-v1.md)。
+
+临时帧覆盖、镜像挂点与资源租约见 [临时帧动画层 v1](pet-animation-layer-v1.md)。
