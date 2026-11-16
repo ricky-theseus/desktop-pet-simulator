@@ -28,22 +28,28 @@ public partial class Main : IPetScreenService
 
     private void RefreshModMenu()
     {
-        if (menu is null) return;
+        RefreshModCommands(menu);
+        RefreshModCommands(trayMenu);
+        modMenuIds.Clear();
+        modMenuIds.AddRange(modMenu.Items.Select(command => command.Id));
+    }
+
+    private void RefreshModCommands(PopupMenu? target)
+    {
+        if (target is null) return;
         foreach (var id in modMenuIds)
         {
-            var index = menu.GetItemIndex(id);
-            if (index >= 0) menu.RemoveItem(index);
+            var index = target.GetItemIndex(id);
+            if (index >= 0) target.RemoveItem(index);
         }
-        modMenuIds.Clear();
-        var separator = menu.GetItemIndex(ModSeparatorId);
-        if (separator >= 0) menu.RemoveItem(separator);
+        var separator = target.GetItemIndex(ModSeparatorId);
+        if (separator >= 0) target.RemoveItem(separator);
         if (modMenu.Items.Count == 0) return;
-        menu.AddSeparator("", ModSeparatorId);
+        target.AddSeparator("", ModSeparatorId);
         foreach (var command in modMenu.Items)
         {
-            menu.AddItem(command.Text, command.Id);
-            menu.SetItemDisabled(menu.GetItemIndex(command.Id), !command.Enabled);
-            modMenuIds.Add(command.Id);
+            target.AddItem(command.Text, command.Id);
+            target.SetItemDisabled(target.GetItemIndex(command.Id), !command.Enabled);
         }
     }
 }

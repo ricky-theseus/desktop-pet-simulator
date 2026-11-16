@@ -2,9 +2,11 @@
 
 三个服务的 `ApiVersion` 均为 `1.0`，仅在 Godot 主线程调用。它们提供通用菜单入口、屏幕位置和活动协调，不包含具体玩法。
 
-## 右键入口
+## 右键与托盘入口
 
 从 `ModContext.Services` 取得 `IPetMenuService`，调用 `Register(owner, key, text, execute)`。`owner` 使用 manifest ID，`key` 在该 Mod 内唯一；重复注册抛出异常。返回的 `IPetMenuCommand` 可更新 `Text` 与 `Enabled`，宿主同步更新菜单。禁用命令不执行，回调异常由宿主显示为可恢复提示。
+
+在支持系统托盘的平台，同一组命令同时出现在托盘右键菜单，使用同一回调、标题和启用状态。关闭所有宠物外观后仍可访问已启用 Mod 的入口；停止 Mod 时释放命令，两处菜单同时移除。托盘左键继续打开管理器。无需重复注册托盘命令；无托盘能力的平台保留宠物右键行为。
 
 ```csharp
 private IPetMenuCommand? command;

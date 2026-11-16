@@ -24,6 +24,7 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
     private ModManagerMod? modManager;
     private Action? tickDistribution = null;
     private StatusIndicator? tray;
+    private PopupMenu? trayMenu;
     private bool wholeWindowPassthrough;
     private const string DefaultAppearance = "res://assets/mushroom/appearance.json";
 
@@ -125,7 +126,7 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
     private void CreateTray()
     {
         if (!DisplayServer.HasFeature(DisplayServer.Feature.StatusIndicator)) return;
-        var trayMenu = new PopupMenu { Name = "TrayMenu", PreferNativeMenu = true, Theme = CreateMenuTheme() };
+        trayMenu = new PopupMenu { Name = "TrayMenu", PreferNativeMenu = true, Theme = CreateMenuTheme() };
         trayMenu.AddItem("打开 Mod 管理器", ModsAction);
         trayMenu.AddSeparator();
         trayMenu.AddItem("退出桌宠", QuitAction);
@@ -146,6 +147,7 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
             }
         };
         AddChild(tray);
+        RefreshModMenu();
     }
 
     // 发行实现由显式构建选项接入；公共构建没有实现时，此调用在编译时移除。
