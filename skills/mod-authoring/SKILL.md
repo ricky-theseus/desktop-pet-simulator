@@ -5,6 +5,8 @@ description: Use when 为桌面宠物模拟器创建或修改外观、独立 C# 
 
 # Mod 开发 Skill
 
+玩家只描述玩法时，由 Agent 负责环境检查、实现、构建、验证和本地安装，技术参数选择合理默认值。缺少环境时读取[官方 Agent 创作入口](https://github.com/ricky-theseus/desktop-pet-simulator/blob/main/AGENT_SETUP.md)并执行；不要把安装命令交还玩家。新装 Skill 尚未出现在宿主列表时，直接读取其内容在当前会话继续，不要求玩家重启 Agent 才开始制作。只有创作偏好、必要权限或真实环境限制需要玩家介入；不保证未验证的效果，不擅自收费或发布。
+
 若存在 [安装位置说明](references/devkit.md)，先读取它；后文 `sdk/`、`examples/`、`tools/` 均相对于其中的开发包根目录。源码仓库内使用时，以仓库根目录为准。
 
 先阅读公开契约，外部作者无需私有设计文档或宿主源码：

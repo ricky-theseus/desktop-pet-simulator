@@ -15,7 +15,28 @@ Godot 4 .NET 桌宠已支持透明窗口、动作交互与外观切换。公开�
 
 开发者可从 [公共代码 Mod SDK](sdk/code-mod-v1.md) 与 [独立小灯示例](examples/code-desk-lamp/README.md) 开始，不必修改宿主或获取私有实现。代码包为同进程完全信任代码，不提供沙箱隔离。
 
-## 一键安装 SDK 与 Agent Skill
+<a id="一键安装-sdk-与-agent-skill"></a>
+
+## 让 Agent 帮你制作 Mod
+
+**复制下面这段话，发给能访问本机文件和执行命令的 AI 编程助手（例如 Codex 或 Claude Code），然后告诉它你的想法。**
+
+```text
+请读取这份《桌面宠物模拟器》官方 Agent 指南，并按指南帮我准备 Mod 创作环境：
+https://github.com/ricky-theseus/desktop-pet-simulator/blob/main/AGENT_SETUP.md
+
+接着帮我制作、验证，并安装到本机游戏里。环境检查、依赖安装、技术选择和打包都请你完成；我只需要描述想要的效果。
+我想做的 Mod 是：……
+```
+
+例如：“让一只小猫在桌面追着毛线球跑，点击毛线球就换个方向。”还没想好也可以先发送前面的内容，让 Agent 准备好创作环境。
+
+Agent 会按需准备 SDK、示例、构建工具和三个开发 Skill，在当前对话里继续制作；已有环境会优先复用。完成后告诉你从哪里打开 Mod、怎么玩，以及哪些效果已验证。玩家无需自己选择 SDK 版本、填写打包参数或执行终端命令。当前完整安装与试玩流程支持 Windows x64。
+
+[查看 Agent 执行指南](AGENT_SETUP.md)。需要自行操作的开发者也可以展开下面的手动入口。
+
+<details>
+<summary>手动安装与打包（开发者可选）</summary>
 
 **Windows：复制整段到 PowerShell 执行。** 默认安装 Mod 开发套件及 Codex Skill，无需预先安装 Git、Python 或 Godot 编辑器。
 
@@ -75,6 +96,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\DesktopPet
 将示例路径换成自己的项目路径；`manifest.json` 默认从项目同目录读取，也可通过 `-Manifest` 指定。输出已存在时请选择新目录。代码 Mod 首次安装或更新后需重启游戏；外观包可用套件的 `tools/pack-example-mod.ps1` 打包。
 
 SDK、示例及原创资源遵循本项目的非商业许可；未经另行书面授权不得商用。
+
+</details>
 
 ## 核心关系
 

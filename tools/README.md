@@ -4,6 +4,8 @@ tools/ 放开发期工具，scripts/ 放可审计的仓库维护脚本。
 
 脚本不得静默下载可执行文件、读取密钥或修改用户数据。
 
+面向玩家的入口是[复制指令发给 Agent](../README.md#让-agent-帮你制作-mod)。Agent 按[创作指南](../AGENT_SETUP.md)自行检查环境、调用下面的工具，并继续制作、验证和本地安装；手动命令保留给开发者按需使用。
+
 Windows 开发套件的复制安装入口见 [README](../README.md#一键安装-sdk-与-agent-skill)。`install-dev-kit.ps1` 下载并校验版本固定的套件、注册 Agent Skill；缺少 .NET SDK 时明确提示并使用 Microsoft 安装脚本安装到套件内，不修改系统 PATH。支持 `-SkillsOnly`、`-Agent None/Codex/Claude/Both`、`-InstallDirectory`、`-SkillsDirectory`；`-ArchivePath` 可指定本地同版本 ZIP，仍校验内置 SHA-256。
 
 安装后的 `build-mod.ps1` 自动引用套件内的 SDK DLL 和已检测到的 .NET SDK，接受 `-Project`、`-Manifest`、`-OutputDirectory` 和 `-AssetsDirectory`。不传项目时构建桌面小灯示例。该入口依赖安装器生成的 `install.json`，在源码仓库开发时使用下面的通用打包工具。
