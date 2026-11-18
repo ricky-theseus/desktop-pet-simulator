@@ -12,4 +12,11 @@
     <ProjectReference Include="..\..\..\core\DesktopPet.Core\DesktopPet.Core.csproj" />
     <ProjectReference Include="..\..\..\mods\official\mushroom\DesktopPet.OfficialMushroom.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../external-mods-fixtures/Plugin/Fixture.Plugin.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <Target Name="CopyExternalModFixtures" AfterTargets="Build">
+    <ItemGroup><FixtureFiles Include="../../external-mods-fixtures/Plugin/bin/$(Configuration)/net8.0/Fixture.*.dll" /></ItemGroup>
+    <Copy SourceFiles="@(FixtureFiles)" DestinationFolder="$(OutDir)Fixtures" />
+  </Target>
 </Project>

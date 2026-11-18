@@ -4,6 +4,8 @@ SDK 目录将承载 Mod manifest schema、CLI、测试夹具、模板和 Agent �
 
 SDK 的公共契约必须与 Core API 版本同步，并提供兼容矩阵。
 
+独立 C# 类库、目录/ZIP 安装、服务生命周期与打包步骤见 [外部代码 Mod SDK v1](code-mod-v1.md)。可直接构建 [桌面小灯示例](../examples/code-desk-lamp/README.md)，不需要修改宿主工程。
+
 已实现的外观帧动画配置、动作回退与制作规范见 [外观与动作格式 v1](appearance-v1.md)。
 
 本地安装包、管理服务、兼容性与恢复规则见 [Mod 管理契约 v1](mod-management-v1.md)。
@@ -13,3 +15,7 @@ SDK 的公共契约必须与 Core API 版本同步，并提供兼容矩阵。
 右键菜单命令、屏幕位置和独占活动协调见 [宠物扩展服务 v1](pet-extension-v1.md)。
 
 临时帧覆盖、镜像挂点与资源租约见 [临时帧动画层 v1](pet-animation-layer-v1.md)。
+
+多只桌宠共存、独立服务域、收起恢复与角色 Mod 示例见 [宠物实例服务 v1](pet-instances-v1.md)。
+
+持续大小、透明度、置顶与采样方式见 [宠物显示设置 v1](pet-display-v1.md)。

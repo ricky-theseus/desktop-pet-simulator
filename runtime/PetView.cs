@@ -39,10 +39,13 @@ public partial class PetView : Node2D
         AddChild(sprite);
     }
 
+    internal void SetSmoothScaling(bool enabled)
+        => sprite.TextureFilter = enabled ? TextureFilterEnum.Linear : TextureFilterEnum.Nearest;
+
     public void LoadAppearance(string path)
     {
         path = path.Replace('\\', '/');
-        using var file = Godot.FileAccess.Open(path, Godot.FileAccess.ModeFlags.Read)
+        using var file = global::Godot.FileAccess.Open(path, global::Godot.FileAccess.ModeFlags.Read)
             ?? throw new InvalidOperationException($"Cannot open appearance: {path}");
         var definition = PetAppearanceDefinition.FromJson(file.GetAsText());
         var directory = path[..(path.LastIndexOf('/') + 1)];

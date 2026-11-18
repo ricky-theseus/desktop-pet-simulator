@@ -8,8 +8,8 @@ namespace DesktopPet.Runtime;
 public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
 {
     public string ApiVersion => "1.0";
-    bool IPetVisualService.IsVisible => pet?.Visible == true;
-    public bool CanPose => pet?.Visible == true && pet.Action == "idle" && !pointerDown && menu?.Visible != true;
+    bool IPetVisualService.IsVisible => pet?.Visible == true && GetWindow().Visible;
+    public bool CanPose => pet?.Visible == true && GetWindow().Visible && pet.Action == "idle" && !pointerDown && menu?.Visible != true;
 
     public void SetPose(PetVisualPose pose)
     {
@@ -46,16 +46,28 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
         GetViewport().TransparentBg = true;
         GetViewport().GuiEmbedSubwindows = false;
         GetWindow().Transparent = true;
-        DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.Transparent, true);
-        DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.Borderless, true);
-        DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.AlwaysOnTop, true);
+        DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.Transparent, true, GetWindow().GetWindowId());
+        DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.Borderless, true, GetWindow().GetWindowId());
+        DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.AlwaysOnTop, true, GetWindow().GetWindowId());
 
-        if (OperatingSystem.IsWindows() && DisplayServer.GetName() != "headless" &&
-            !OS.GetCmdlineUserArgs().Contains("--show-taskbar"))
-        {
-            WindowsDesktopWindow.HideTaskbarButton((nint)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle));
-        }
+        ApplyTaskbarStyle();
         GetWindow().FocusExited += CancelPointer;
+
+        if (instanceOptions is not null)
+        {
+            try
+            {
+                CreatePetView();
+                ApplyAppearance(instanceOptions.AppearancePath);
+                CreatePetControls();
+                instanceOptions.Services.Add<IPetAppearanceService>(this);
+                instanceOptions.Services.Add<IPetVisualService>(this);
+                ConfigureModServices(instanceOptions.Services);
+                RefreshMousePassthrough();
+            }
+            catch (Exception error) { instanceStartupError = error; }
+            return;
+        }
 
         var arguments = OS.GetCmdlineUserArgs();
         var safeMode = arguments.Contains("--safe-mode");
@@ -69,19 +81,19 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
         services.Add<IPetAppearanceService>(this);
         services.Add<IPetVisualService>(this);
         ConfigureModServices(services);
+        instanceDataDirectory = System.IO.Path.Combine(dataDirectory, "pet-instances");
+        services.Add<IPetInstanceService>(this);
         host = new ModHost(new ModHostOptions("1.0"), services);
         services.Add<IModRuntimeService>(host);
         ConfigureLocalMods(builtIns, services, host, safeMode);
-        var management = new ModManagementService(dataDirectory, builtIns, host);
+        var management = new ModManagementService(dataDirectory, builtIns, host, ResolveModsDirectory(arguments));
         services.Add<IModManagementService>(management);
         var mushroom = new MushroomMod();
         host.Register(mushroom);
         services.Add<ISteamService>(new OfflineSteamService());
         ConfigureDistribution(services, host, safeMode);
 
-        pet = new PetView { Position = PetOffset };
-        AddChild(pet);
-        pet.HitRegionChanged += RefreshMousePassthrough;
+        CreatePetView();
         var failedAppearance = false;
         try
         {
@@ -96,14 +108,40 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
             failedAppearance = true;
         }
 
+        CreatePetControls();
+        modManager = new ModManagerMod(this, PresentModWindow);
+        host.Register(modManager);
+        if (!safeMode) RegisterExternalMods(management, dataDirectory);
+        // 重复外部 ID 已由目录校验隔离；保留内置管理入口，不让坏包中断宿主初始化。
+        var enabledMods = management.List().GroupBy(mod => mod.Id).ToDictionary(group => group.Key, group => group.First().Enabled);
+        try { host.StartAll(id => !enabledMods.TryGetValue(id, out var enabled) || enabled); }
+        catch (Exception exception)
+        {
+            GD.PushWarning("部分 Mod 启动失败：" + exception.Message);
+            failedAppearance = true;
+        }
+        CreateTray();
+        if (arguments.Contains("--open-mod-manager") || failedAppearance) modManager.Show();
+        RefreshMousePassthrough();
+    }
+
+    private void CreatePetView()
+    {
+        pet = new PetView { Position = PetOffset };
+        AddChild(pet);
+        pet.HitRegionChanged += RefreshMousePassthrough;
+    }
+
+    private void CreatePetControls()
+    {
         menu = new PopupMenu { Theme = CreateMenuTheme() };
-        menu.AddItem($"喂{pet.DisplayName}", FeedAction);
+        menu.AddItem($"喂{pet!.DisplayName}", FeedAction);
         menu.AddItem($"摸摸{pet.DisplayName}", PetAction);
         menu.AddSeparator();
         menu.AddItem("Mod 管理器…", ModsAction);
-        menu.AddSeparator();
         menu.AddItem("回到屏幕中央", CenterAction);
-        menu.AddItem("退出桌宠", QuitAction);
+        menu.AddSeparator("", 998);
+        menu.AddItem("退出程序", QuitAction);
         menu.IdPressed += OnMenuItemPressed;
         AddChild(menu);
 
@@ -114,13 +152,7 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
         AddChild(feedback);
-        modManager = new ModManagerMod(this, PresentModWindow);
-        host.Register(modManager);
-        var enabledMods = management.List().ToDictionary(mod => mod.Id, mod => mod.Enabled);
-        host.StartAll(id => !enabledMods.TryGetValue(id, out var enabled) || enabled);
-        CreateTray();
-        if (arguments.Contains("--open-mod-manager") || failedAppearance) modManager.Show();
-        RefreshMousePassthrough();
+        RefreshModMenu();
     }
 
     private void CreateTray()
@@ -128,8 +160,8 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
         if (!DisplayServer.HasFeature(DisplayServer.Feature.StatusIndicator)) return;
         trayMenu = new PopupMenu { Name = "TrayMenu", PreferNativeMenu = true, Theme = CreateMenuTheme() };
         trayMenu.AddItem("打开 Mod 管理器", ModsAction);
-        trayMenu.AddSeparator();
-        trayMenu.AddItem("退出桌宠", QuitAction);
+        trayMenu.AddSeparator("", 998);
+        trayMenu.AddItem("退出程序", QuitAction);
         trayMenu.IdPressed += OnMenuItemPressed;
         AddChild(trayMenu);
         tray = new StatusIndicator
@@ -166,7 +198,7 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
 
     public void ApplyAppearance(string? path)
     {
-        pet?.LoadAppearance(path ?? DefaultAppearance);
+        pet?.LoadAppearance(path ?? instanceOptions?.AppearancePath ?? DefaultAppearance);
         if (pet is not null) pet.Visible = true;
         if (menu is not null && pet is not null)
         {
@@ -190,6 +222,7 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
     public override void _Process(double delta)
     {
         tickDistribution?.Invoke();
+        foreach (var scope in externalModScopes.ToArray()) scope.Tick(delta);
         pet?.RefreshAnimationPresentation();
         if (pet?.Visible == true) petState.Tick((float)delta);
         if (feedback is null || !feedback.Visible)
@@ -211,7 +244,7 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
 
         if (inputEvent is InputEventMouseMotion motion && pointerDown)
         {
-            var pointer = DisplayServer.WindowGetPosition() + (Vector2I)motion.Position;
+            var pointer = GetWindow().Position + (Vector2I)motion.Position;
             if (!dragging && ((Vector2)(pointer - pressScreen)).Length() >= 6f)
             {
                 dragging = true;
@@ -219,7 +252,7 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
                 if (feedback is not null) feedback.Visible = false;
                 RefreshMousePassthrough();
             }
-            if (dragging) DisplayServer.WindowSetPosition(pointer - grabOffset);
+            if (dragging) GetWindow().Position = pointer - grabOffset;
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -230,14 +263,15 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
             if (dragging)
             {
                 pet.Play("land");
-                var area = DisplayServer.ScreenGetUsableRect();
-                var size = DisplayServer.WindowGetSize();
-                var position = DisplayServer.WindowGetPosition();
-                DisplayServer.WindowSetPosition(new Vector2I(
+                var area = DisplayServer.ScreenGetUsableRect(GetWindow().CurrentScreen);
+                var size = GetWindow().Size;
+                var position = GetWindow().Position;
+                GetWindow().Position = new Vector2I(
                     Math.Clamp(position.X, area.Position.X, Math.Max(area.Position.X, area.End.X - size.X)),
-                    Math.Clamp(position.Y, area.Position.Y, Math.Max(area.Position.Y, area.End.Y - size.Y))));
+                    Math.Clamp(position.Y, area.Position.Y, Math.Max(area.Position.Y, area.End.Y - size.Y)));
+                instanceOptions?.PositionChanged(GetWindow().Position);
             }
-            else if (pet.InteractionRect.HasPoint(mouseButton.Position - pet.Position))
+            else if (pet.InteractionRect.HasPoint((mouseButton.Position - pet.Position) / pet.Scale))
             {
                 petState.Interact();
                 pet.Play("pet");
@@ -249,7 +283,7 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
             return;
         }
 
-        if (!mouseButton.Pressed || !pet.InteractionRect.HasPoint(mouseButton.Position - pet.Position)) return;
+        if (!mouseButton.Pressed || !pet.InteractionRect.HasPoint((mouseButton.Position - pet.Position) / pet.Scale)) return;
         if (mouseButton.ButtonIndex == MouseButton.Right)
         {
             if (menu is not null)
@@ -273,7 +307,7 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
         pet.RefreshAnimationPresentation();
         doubleClick = mouseButton.DoubleClick;
         grabOffset = (Vector2I)mouseButton.Position;
-        pressScreen = DisplayServer.WindowGetPosition() + grabOffset;
+        pressScreen = GetWindow().Position + grabOffset;
         GetViewport().SetInputAsHandled();
     }
 
@@ -286,14 +320,21 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
 
     public override void _ExitTree()
     {
+        instancesShuttingDown = true;
         if (tray is not null) tray.Visible = false;
+        modMenu.Changed -= RefreshModMenu;
+        if (instanceOptions is not null) instanceOptions.SharedMenu.Changed -= RefreshModMenu;
+        if (pet is not null) pet.HitRegionChanged -= RefreshMousePassthrough;
         GetWindow().FocusExited -= CancelPointer;
-        host?.StopAll();
+        try { host?.StopAll(); }
+        catch (Exception exception) { GD.PushWarning("停止 Mod 时发生错误：" + exception.Message); }
+        foreach (var scope in externalModScopes.ToArray()) scope.Dispose();
+        foreach (var instance in petInstances.Values.ToArray()) instance.Dispose();
     }
 
     private void OnMenuItemPressed(long action)
     {
-        try { if (modMenu.Invoke((int)action)) return; }
+        try { if (InvokeModCommand((int)action)) return; }
         catch (Exception error)
         {
             GD.PushWarning("Mod 菜单操作失败：" + error.Message);
@@ -308,7 +349,8 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
         switch (action)
         {
             case ModsAction:
-                modManager?.Show();
+                if (instanceOptions is null) modManager?.Show();
+                else instanceOptions.OpenManager();
                 break;
             case FeedAction:
                 petState.Feed();
@@ -332,24 +374,24 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
 
     private void CenterWindow()
     {
-        var workArea = DisplayServer.ScreenGetUsableRect();
-        var windowSize = DisplayServer.WindowGetSize();
-        DisplayServer.WindowSetPosition(workArea.Position + (workArea.Size - windowSize) / 2);
+        var workArea = DisplayServer.ScreenGetUsableRect(GetWindow().CurrentScreen);
+        var windowSize = GetWindow().Size;
+        GetWindow().Position = workArea.Position + (workArea.Size - windowSize) / 2;
+        instanceOptions?.PositionChanged(GetWindow().Position);
     }
 
     private void RefreshMousePassthrough()
     {
-        if (pet is null) return;
+        if (pet is null || !IsInsideTree() || GetWindow().GetWindowId() < 0) return;
         if (wholeWindowPassthrough == pet.Visible)
         {
             wholeWindowPassthrough = !pet.Visible;
-            DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.MousePassthrough, wholeWindowPassthrough);
+            DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.MousePassthrough, wholeWindowPassthrough, GetWindow().GetWindowId());
             // Godot 刷新窗口标记时会重建 Windows 扩展样式，需要重新保留无任务栏行为。
-            if (OperatingSystem.IsWindows() && DisplayServer.GetName() != "headless" && !OS.GetCmdlineUserArgs().Contains("--show-taskbar"))
-                WindowsDesktopWindow.HideTaskbarButton((nint)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle));
+            ApplyTaskbarStyle();
         }
         if (!pet.Visible) return;
-        var region = pet.HitPolygon.Select(point => point + PetOffset).ToArray();
+        var region = pet.HitPolygon.Select(point => point * pet.Scale + pet.Position).ToArray();
         if (feedback?.Visible == true)
         {
             // Windows 会同时裁剪穿透区域之外的画面，气泡显示时须包含其边界。
@@ -360,7 +402,14 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
             ]);
         }
 
-        DisplayServer.WindowSetMousePassthrough(region);
+        DisplayServer.WindowSetMousePassthrough(region, GetWindow().GetWindowId());
+    }
+
+    private void ApplyTaskbarStyle()
+    {
+        if (OperatingSystem.IsWindows() && DisplayServer.GetName() != "headless" && GetWindow().GetWindowId() >= 0 &&
+            !OS.GetCmdlineUserArgs().Contains("--show-taskbar"))
+            WindowsDesktopWindow.HideTaskbarButton((nint)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle, GetWindow().GetWindowId()));
     }
 
     private void PositionMenuBesidePet()
@@ -370,9 +419,9 @@ public partial class Main : Node2D, IPetAppearanceService, IPetVisualService
             return;
         }
 
-        var windowPosition = DisplayServer.WindowGetPosition();
-        var windowSize = DisplayServer.WindowGetSize();
-        var workArea = DisplayServer.ScreenGetUsableRect();
+        var windowPosition = GetWindow().Position;
+        var windowSize = GetWindow().Size;
+        var workArea = DisplayServer.ScreenGetUsableRect(GetWindow().CurrentScreen);
         var menuSize = menu.Size;
         const int gap = 8;
 

@@ -108,7 +108,7 @@ public partial class PetView
         public static AnimationLayer Load(PetView view, string path, int priority, Func<bool> canPresent)
         {
             path = path.Replace('\\', '/');
-            using var file = Godot.FileAccess.Open(path, Godot.FileAccess.ModeFlags.Read)
+            using var file = global::Godot.FileAccess.Open(path, global::Godot.FileAccess.ModeFlags.Read)
                 ?? throw new ArgumentException("Cannot open animation layer definition.", nameof(path));
             if (file.GetLength() > 1024 * 1024) throw new ArgumentException("Animation layer definition is too large.", nameof(path));
             var definition = PetAnimationLayerDefinition.FromJson(file.GetAsText());

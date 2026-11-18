@@ -49,3 +49,6 @@ libsteam_api.so
 *.private.*
 *.local.*
 
+# 本地运行时加载的独立 Mod 包可以包含私有玩法与素材。
+/runtime/mods/
+

@@ -164,12 +164,12 @@ public sealed class ModManagerMod(Node parent, Action<Window>? presentNativeWind
             var label = Text(name, mod.Name, 20);
             label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
             label.ClipText = true;
-            var detail = "v" + mod.Version + (mod.Error is not null ? " · 异常" : current ? " · 当前外观" :
+            var detail = "v" + mod.Version + (mod.Error is not null ? " · 异常" : mod.RestartRequired ? " · 重启生效" : current ? " · 当前外观" :
                 mod.Source == "内置" && mod.AppearancePath is null && mod.Enabled != mod.Running ? " · 重启生效" : "");
             Text(name, detail, 16, mod.Error is not null ? "#9c334c" : "#716575");
             var toggle = new CheckButton
             {
-                Name = "EnableToggle", ButtonPressed = mod.Enabled, Disabled = busy || mod.Required || mod.Error is not null,
+                Name = "EnableToggle", ButtonPressed = mod.Enabled, Disabled = busy || mod.Required,
                 CustomMinimumSize = new Vector2(52, 40), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
                 TooltipText = mod.Required ? "管理入口默认开启" : mod.Enabled ? "关闭" + mod.Name : "启动" + mod.Name
             };

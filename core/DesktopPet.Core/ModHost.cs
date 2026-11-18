@@ -9,7 +9,7 @@ public sealed class ModContext(ServiceRegistry services, ICollection<string> lif
     public ICollection<string> LifecycleLog { get; } = lifecycleLog;
 }
 
-public sealed class ModHost : IModRuntimeService
+public sealed class ModHost : IModRuntimeService, IModRuntimeErrorService
 {
     private readonly ModHostOptions options;
     private readonly ServiceRegistry services;
@@ -18,11 +18,14 @@ public sealed class ModHost : IModRuntimeService
     private readonly HashSet<string> running = [];
     private readonly HashSet<string> pendingCleanup = [];
     private bool started;
+    private readonly Dictionary<string, string> errors = [];
+    public string? GetError(string id) => errors.GetValueOrDefault(id);
 
     public ModHost(ModHostOptions options, ServiceRegistry? services = null)
     {
         this.options = options;
         this.services = services ?? new ServiceRegistry();
+        this.services.Add<IModRuntimeService>(this);
     }
 
     public IReadOnlyList<string> LifecycleLog => lifecycleLog;
@@ -64,10 +67,14 @@ public sealed class ModHost : IModRuntimeService
 
         // 先进入运行阶段；后续启动失败时，已成功启动的 Mod 仍可由 StopAll 释放。
         started = true;
+        var failures = new List<Exception>();
         foreach (var mod in mods)
         {
-            if (shouldStart?.Invoke(mod.Manifest.Id) ?? true) SetEnabled(mod.Manifest.Id, true);
+            try { if (shouldStart?.Invoke(mod.Manifest.Id) ?? true) SetEnabled(mod.Manifest.Id, true); }
+            catch (Exception exception) { failures.Add(exception); }
         }
+        if (failures.Count == 1) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failures[0]).Throw();
+        if (failures.Count > 1) throw new AggregateException("部分 Mod 启动失败；其余 Mod 已完成启动尝试。", failures);
     }
 
     public void SetEnabled(string id, bool enabled)
@@ -89,6 +96,7 @@ public sealed class ModHost : IModRuntimeService
             try { mod.Start(context); }
             catch (Exception startError)
             {
+                errors[id] = startError.Message;
                 try { mod.Stop(context); }
                 catch (Exception cleanupError)
                 {
@@ -97,6 +105,7 @@ public sealed class ModHost : IModRuntimeService
                 }
                 throw new InvalidOperationException($"启动 Mod“{mod.Manifest.Name}”({id}) 失败：{startError.Message}", startError);
             }
+            errors.Remove(id);
             running.Add(id);
             return;
         }
@@ -110,8 +119,10 @@ public sealed class ModHost : IModRuntimeService
         try { mod.Stop(context); }
         catch (Exception exception)
         {
+            errors[id] = exception.Message;
             throw new InvalidOperationException($"停止 Mod“{mod.Manifest.Name}”({id}) 失败：{exception.Message}", exception);
         }
+        errors.Remove(id);
         running.Remove(id);
         pendingCleanup.Remove(id);
     }

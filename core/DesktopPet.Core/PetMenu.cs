@@ -5,7 +5,12 @@ public interface IPetMenuService
 {
     string ApiVersion { get; }
     IPetMenuCommand Register(string owner, string key, string text, Action execute);
+    IPetMenuCommand Register(string owner, string key, string text, Action execute, PetMenuScope scope)
+        => scope == PetMenuScope.Local ? Register(owner, key, text, execute)
+            : throw new NotSupportedException("此菜单服务不支持共享或仅托盘入口。");
 }
+
+public enum PetMenuScope { Local, Shared, TrayOnly }
 
 public interface IPetMenuCommand : IDisposable
 {
@@ -22,14 +27,18 @@ public sealed class PetMenuService : IPetMenuService
     public IReadOnlyList<Command> Items => commands.AsReadOnly();
 
     public IPetMenuCommand Register(string owner, string key, string text, Action execute)
+        => Register(owner, key, text, execute, PetMenuScope.Local);
+
+    public IPetMenuCommand Register(string owner, string key, string text, Action execute, PetMenuScope scope)
     {
+        if (!Enum.IsDefined(scope)) throw new ArgumentOutOfRangeException(nameof(scope));
         ArgumentException.ThrowIfNullOrWhiteSpace(owner);
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
         ArgumentNullException.ThrowIfNull(execute);
         if (commands.Any(item => item.Owner == owner && item.Key == key))
             throw new InvalidOperationException($"菜单命令重复：{owner}/{key}");
-        var command = new Command(this, nextId++, owner, key, text, execute);
+        var command = new Command(this, nextId++, owner, key, text, execute, scope);
         commands.Add(command);
         Changed?.Invoke();
         return command;
@@ -53,6 +62,7 @@ public sealed class PetMenuService : IPetMenuService
         public int Id { get; }
         public string Owner { get; }
         public string Key { get; }
+        public PetMenuScope Scope { get; }
         public string Text
         {
             get => text;
@@ -75,9 +85,10 @@ public sealed class PetMenuService : IPetMenuService
             }
         }
 
-        internal Command(PetMenuService service, int id, string owner, string key, string text, Action execute)
+        internal Command(PetMenuService service, int id, string owner, string key, string text, Action execute, PetMenuScope scope)
         {
             this.service = service; Id = id; Owner = owner; Key = key; this.text = text; Execute = execute;
+            Scope = scope;
         }
 
         public void Dispose()

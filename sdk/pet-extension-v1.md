@@ -26,6 +26,15 @@ public void Stop(ModContext context)
 
 `Dispose` 可重复调用；释放时移除菜单项及回调，旧句柄不会删除后来注册的同名入口。菜单不负责持久化 Mod 设置；代码 Mod 通过已有运行服务启停。
 
+注册重载增加 `PetMenuScope`：默认 `Local` 保持原行为，全局服务注册后出现在兼容主宠物和托盘，实例服务注册后只出现在该实例；全局注册 `Shared` 时，入口同步到所有宠物及托盘（例如独立农场）；全局注册 `TrayOnly` 时，只出现在托盘（例如系统收起后的恢复入口）。实例自身的服务不能广播到其他实例。老宿主未实现此重载时会明确拒绝非 Local 注册，不静默降级。宿主映射不同服务域的命令编号，Mod 不应依赖具体 UI 菜单 ID。
+
+```csharp
+context.Services.GetRequired<IPetMenuService>()
+    .Register(Manifest.Id, "open", "桌面活动", OpenActivity, PetMenuScope.Shared);
+```
+
+共享入口的标题、禁用状态和释放会实时同步。专属动作仍绑定原目标，不因为入口共享而切换到点击菜单的角色；只有不依赖具体角色的功能应声明 Shared。
+
 ## 屏幕位置
 
 `IPetScreenService.GetState()` 返回 `PetScreenState`：`Visible`、`CenterX`、`CenterY`、`GroundY`、`DisplaySize`。坐标与宿主屏幕窗口坐标一致，可能为负；中心和脚底以中立姿态为准，不包含视觉变形。跟随宠物的窗口应每帧重新读取位置，并在 `Visible == false` 时收起依赖宠物的界面。

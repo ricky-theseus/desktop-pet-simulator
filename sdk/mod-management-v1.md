@@ -4,7 +4,7 @@
 
 ## 首版兼容范围
 
-本地导入接受 **外观数据包**，含 JSON、PNG 和 Markdown 说明。它们可更改形象及动作配置；不加载第三方 C#、GDScript、DLL 或 PCK。官方代码 Mod 随宿主编译，通过 `IMod.Start/Stop` 管理生命周期。manifest 的权限声明目前用于描述内置代码能力；它不是任意代码的沙箱。
+本地目录与 ZIP 支持 **外观数据包**（JSON、PNG、Markdown）和 **独立代码包**（DLL、manifest 与资源）。外观无需编译；代码由外部作者仅使用公开 Core/Godot SDK 独立构建，通过 `IMod.Start/Stop` 管理生命周期。代码包必须声明 `full-trust`，同进程执行，没有沙箱。入口、兼容矩阵和独立仓库步骤见 [外部代码 Mod SDK v1](code-mod-v1.md)。不支持直接执行 GDScript 源码或加载 PCK。
 
 ZIP 根目录必须包含 `manifest.json`，不能额外套一层文件夹：
 
@@ -30,7 +30,7 @@ ZIP 根目录必须包含 `manifest.json`，不能额外套一层文件夹：
 - ID 长度 2–80，匹配 `[a-z0-9][a-z0-9._-]{1,79}`；`official-` 前缀保留。ID 与包内路径组件不得以点或空格结尾，且不能使用 Windows 保留设备名，保证跨平台路径一致。
 - 名称最多 64 字符，描述最多 2048 字符，版本使用数值版本，如 `1.0.0`。
 - `dependencies` 最多 64 项，表示 Mod ID，不支持版本范围；依赖必须已安装、有效并启用，不允许自依赖或循环依赖。
-- `permissions` 必须为空；`kind` 必须是 `appearance`；`apiVersion` 必须是 `1.0`。
+- `apiVersion` 必须是 `1.0`；`kind: appearance` 的 `permissions` 必须为空，`kind: code` 必须仅声明 `["full-trust"]`，并提供 DLL `entry` 与公开无参 IMod 的 `entryType`；代码可用 `platforms` 限制 windows、macos、linux。
 - ZIP 最多 1024 条目，单文件最多 8 MB，总解压内容最多 64 MB；所有帧的估算 RGBA 解码内存最多 64 MB。manifest 最多 64 KB，外观 JSON 最多 1 MB。
 - 安装前校验 PNG 签名和声明尺寸；应用外观时还会实际解码并检查可见像素。应用失败保留旧外观，不保存失败选择。
 
@@ -60,18 +60,21 @@ ZIP 根目录必须包含 `manifest.json`，不能额外套一层文件夹：
 
 `SetEnabled(id, true)` 启用外观时，同时原子保存为当前选择。关闭或移除当前外观后，选择列表中第一个可用且已启用的外观；没有可用外观时，`SelectedAppearanceId/Path` 返回 `null`。管理器在保存开关/选择前实际加载候选外观；解码失败保留原配置和画面，保存失败恢复原画面。全关闭时导入的首个外观若不能显示，仍保留安装记录，但自动关闭该包并显示原因。
 
-缺依赖的包可安装，但保持禁用并显示原因。停用或移除被其他有效、已启用 Mod 依赖的包会被拒绝。相同 ID 的新版本不会覆盖旧包；先卸载旧版本再导入。即时启停只作用于宿主预先注册的代码 Mod；当前没有第三方程序集加载、自动更新或替换运行中代码的协议。
+缺依赖的包可安装，但保持禁用并显示原因。停用或移除被其他有效、已启用 Mod 依赖的包会被拒绝。相同 ID 的新版本不会覆盖旧包；外观包可卸载后重新导入，已注册的代码包须完全退出程序后替换或删除目录。宿主启动时通过 `GetCodePackages()` 获取包目录与 manifest 快照并注册外部代码代理；运行期间新导入的代码包需要重启发现，`ManagedMod.RestartRequired` 表示待重启状态。启动时发现的代码 Mod 可即时启停，首次安装、更新或替换代码包需要完整退出重启，不支持热替换已加载的程序集或自动联网更新。
 
 ## 存储与恢复
 
-默认数据位于 Godot `user://mod-platform/`，和源码目录分离：
+发行宿主默认扫描可执行文件同级 `mods/<id>/`，管理服务可通过 `packageDirectory` 指定该目录；程序目录不可写时导入回退到用户数据目录，以 `ModsDirectory` 为准。旧用户数据目录的包继续扫描，重复 ID 报错。目录与 ZIP 使用同一校验流程，坏包显示原因且不影响其他有效包。
 
-- `mods/<id>/`：已安装数据。
+默认管理数据位于 Godot `user://mod-platform/`，和源码目录分离：
+
+- `mods/<id>/`：兼容的旧安装目录，或程序目录不可写时的导入回退目录。
+- 代码 Mod 的独立可写数据位置通过 `IModEnvironment.DataDirectory` 提供，不写入包目录。
 - `mods-state.json`：禁用列表和选中外观，写入临时文件后替换。
-- `removed/<id>-<随机值>/`：卸载时保留的原内容，便于人工恢复；不会自动清空。
+- 包所属 `mods/.removed/<id>-<随机值>/`：卸载时保留的原内容，便于人工恢复；不会自动清空。暂存与目标保持同卷，支持程序与用户数据位于不同磁盘。
 - `mods-state.json.invalid-*`：损坏配置的备份，随后使用默认状态。
 
-管理器默认开启，不能自行关闭或卸载；列表内其他官方 Mod 均可关闭。内置文件随应用发布，不支持从界面删除。默认蘑菇是可选外观，不会在全部外观关闭后强制恢复。宿主此时停止渲染宠物并穿透鼠标，托盘仍可打开管理器；关闭管理窗口只收起，托盘菜单“退出桌宠”才终止进程。旧配置中的 `official-steam` 禁用记录不再控制发行集成。`--safe-mode` 临时显示默认外观并请求发行实现使用安全模式，保留管理器供恢复，不改写保存状态；`--mod-data-dir=<目录>` 可使用独立测试档，不应对同一目录同时运行多个宿主。
+管理器默认开启，不能自行关闭或卸载；列表内其他官方 Mod 均可关闭。内置文件随应用发布，不支持从界面删除。默认蘑菇是可选外观，不会在全部外观关闭后强制恢复。宿主此时停止渲染宠物并穿透鼠标，托盘仍可打开管理器；关闭管理窗口只收起，任意宠物或托盘菜单“退出程序”会终止进程。旧配置中的 `official-steam` 禁用记录不再控制发行集成。`--safe-mode` 临时显示默认外观并请求发行实现使用安全模式，保留管理器供恢复，不改写保存状态；`--mod-data-dir=<目录>` 可使用独立测试档，不应对同一目录同时运行多个宿主。
 
 内容包错误使用 `ModManagementException.Code`，v1 代码前缀为 `package.*` 和 `mod.*`，包括 `package.path`、`package.permission`、`package.version`、`package.limit`、`mod.duplicate`、`mod.required`、`mod.dependency`、`mod.lifecycle` 和 `mod.rollback`。文件系统错误保持 .NET 的 IO 异常，取消为 `OperationCanceledException`，无效外观定义为 `ArgumentException`。界面显示原因并保持运行。
 

@@ -1,6 +1,6 @@
 namespace DesktopPet.Core;
 
-public sealed class ServiceRegistry
+public sealed class ServiceRegistry(ServiceRegistry? parent = null)
 {
     private readonly Dictionary<Type, object> services = [];
 
@@ -16,6 +16,8 @@ public sealed class ServiceRegistry
         {
             return (TService)service;
         }
+
+        if (parent is not null) return parent.GetRequired<TService>();
 
         throw new InvalidOperationException($"Required service is not registered: {typeof(TService).Name}.");
     }
