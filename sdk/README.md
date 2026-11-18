@@ -1,5 +1,7 @@
 # SDK
 
+玩家和外部开发者可使用 [Windows 一键安装](../README.md#一键安装-sdk-与-agent-skill)，获取匹配发行版的 SDK DLL、接口文档、示例、打包工具和 Agent Skill。安装后的 `tools/build-mod.ps1` 使用二进制 SDK 引用，不需要克隆宿主工程。
+
 SDK 目录将承载 Mod manifest schema、CLI、测试夹具、模板和 Agent 使用的结构化接口。
 
 SDK 的公共契约必须与 Core API 版本同步，并提供兼容矩阵。

@@ -15,6 +15,67 @@ Godot 4 .NET 桌宠已支持透明窗口、动作交互与外观切换。公开�
 
 开发者可从 [公共代码 Mod SDK](sdk/code-mod-v1.md) 与 [独立小灯示例](examples/code-desk-lamp/README.md) 开始，不必修改宿主或获取私有实现。代码包为同进程完全信任代码，不提供沙箱隔离。
 
+## 一键安装 SDK 与 Agent Skill
+
+**Windows：复制整段到 PowerShell 执行。** 默认安装 Mod 开发套件及 Codex Skill，无需预先安装 Git、Python 或 Godot 编辑器。
+
+```powershell
+& {
+$ErrorActionPreference = 'Stop'
+$installer = Join-Path $env:TEMP 'Install-DesktopPetModKit-1.0.0.ps1'
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+$release = Invoke-RestMethod 'https://api.github.com/repos/ricky-theseus/desktop-pet-simulator/releases/tags/v1.0.0' -TimeoutSec 30
+$asset = $release.assets | Where-Object name -eq 'Install-ModDevKit.ps1'
+if (!$asset) { throw 'Installer asset not found.' }
+Invoke-WebRequest -UseBasicParsing $asset.url -Headers @{Accept='application/octet-stream'} -OutFile $installer -TimeoutSec 120
+powershell -NoProfile -ExecutionPolicy Bypass -File $installer
+}
+```
+
+安装后获得：
+
+| 内容 | 用途 |
+| --- | --- |
+| Core / Godot SDK DLL 与接口文档 | 针对游戏 1.0.0、Mod API 1.0 独立开发，不依赖宿主源码 |
+| 桌面小灯代码示例、瞌睡蘑菇外观示例 | 从可编译、可打包的例子开始修改 |
+| 构建与 ZIP 打包工具 | 输出可放入游戏 `mods/` 或从管理器导入的包 |
+| `desktop-pet-mod-authoring` | 指导 Agent 创建外观、玩法与独立桌宠 Mod |
+| `desktop-pet-mod-debugging` | 排查加载、兼容、窗口与资源清理问题 |
+| `desktop-pet-mod-publishing` | 检查包结构、兼容信息和发布准备 |
+
+套件默认位于用户目录的 `DesktopPetModKit/`；Codex Skill 安装到 `$CODEX_HOME/skills/`，未设置时使用 `~/.codex/skills/`。安装器会校验套件 SHA-256、记录实际 SDK 路径，并编译打包桌面小灯示例，成功后打印 ZIP 位置。重新开启 Agent 会话即可发现 Skill。
+
+如果缺少 .NET SDK 8 或更新版本，安装器会从 Microsoft 下载 .NET 8 SDK 到套件内的 `.dotnet/`；构建时从 NuGet 下载 Godot.NET.Sdk 4.5.1 等依赖。因此首次安装需要联网，不需要管理员权限，也不修改系统 PATH。游戏需[另外下载](https://github.com/ricky-theseus/desktop-pet-simulator/releases/tag/v1.0.0)。
+
+**按需安装：** 在上面 `powershell -NoProfile ... -File $installer` 这一行末尾追加参数即可；其余命令不变。
+
+| 需求 | 追加参数 |
+| --- | --- |
+| 仅 SDK、示例与工具，不注册 Skill | `-Agent None` |
+| 仅配置 Skill 及其参考资料，不安装 .NET、不编译示例 | `-SkillsOnly` |
+| 为 Claude Code 安装 Skill | `-Agent Claude` |
+| 同时为 Codex 和 Claude Code 安装 | `-Agent Both` |
+| 自定义套件位置 | `-InstallDirectory 'D:\DesktopPetModKit'` |
+| 自定义 Agent 的 Skill 目录 | `-SkillsDirectory 'D:\MyAgent\skills'` |
+
+`-SkillsOnly` 仍会下载套件中的 SDK 文档、示例与工具供 Agent 读取；之后重新执行完整安装命令即可补齐编译环境。安装器不会覆盖已有的非本工具目录，也会保留同一安装中的现有 Skill 修改。可先审阅[安装脚本](tools/install-dev-kit.ps1)，或从 [Release 下载套件 ZIP](https://github.com/ricky-theseus/desktop-pet-simulator/releases/download/v1.0.0/DesktopPetSimulator-ModDevKit-1.0.0.zip)。这一键入口目前支持 Windows。
+
+### 开始制作第一个 Mod
+
+安装后，在 Codex 新会话中输入：
+
+> 使用 $desktop-pet-mod-authoring，读取已安装的 SDK 和桌面小灯示例。帮我在一个新的项目目录制作一个可开关的桌面时钟 Mod，使用公开接口，并构建为可导入游戏的 ZIP。
+
+也可以先复制套件中的 `examples/code-desk-lamp/` 到自己的项目目录，再编译：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\DesktopPetModKit\tools\build-mod.ps1" -Project 'D:\MyMods\DeskClock\DeskLamp.Mod.csproj' -OutputDirectory 'D:\MyMods\DeskClock\dist'
+```
+
+将示例路径换成自己的项目路径；`manifest.json` 默认从项目同目录读取，也可通过 `-Manifest` 指定。输出已存在时请选择新目录。代码 Mod 首次安装或更新后需重启游戏；外观包可用套件的 `tools/pack-example-mod.ps1` 打包。
+
+SDK、示例及原创资源遵循本项目的非商业许可；未经另行书面授权不得商用。
+
 ## 核心关系
 
 ~~~text

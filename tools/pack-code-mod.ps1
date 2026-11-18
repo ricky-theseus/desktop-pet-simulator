@@ -3,13 +3,14 @@ param(
     [Parameter(Mandatory = $true)][string]$Manifest,
     [string]$OutputDirectory = (Join-Path $PSScriptRoot '../build/mods'),
     [string]$AssetsDirectory,
-    [string]$DesktopPetSdkDirectory
+    [string]$DesktopPetSdkDirectory,
+    [string]$DotnetExecutable = 'dotnet'
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $projectPath = (Resolve-Path -LiteralPath $Project).Path
 $manifestPath = (Resolve-Path -LiteralPath $Manifest).Path
-$definition = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+$definition = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($definition.formatVersion -ne 1 -or $definition.apiVersion -ne '1.0' -or $definition.kind -ne 'code') {
     throw '需要 formatVersion 1 / apiVersion 1.0 的 code manifest。'
 }
@@ -30,14 +31,14 @@ try {
         $sdkPath = (Resolve-Path -LiteralPath $DesktopPetSdkDirectory).Path
         $buildArguments += "-p:DesktopPetSdkDirectory=$sdkPath"
     }
-    & dotnet @buildArguments
+    & $DotnetExecutable @buildArguments
     if ($LASTEXITCODE -ne 0) { throw "Mod 构建失败：$LASTEXITCODE" }
     if (-not (Test-Path -LiteralPath (Join-Path $buildPath $definition.entry))) { throw '构建输出找不到 manifest.entry。' }
     [System.IO.Directory]::CreateDirectory($staging) | Out-Null
     # 共享契约必须由宿主提供，否则类型身份不一致；PDB、源码和构建元数据不进入包。
     foreach ($file in Get-ChildItem -LiteralPath $buildPath -Recurse -File -Filter '*.dll') {
         if ($file.Name -match '^(DesktopPet\.(Core|Godot)|GodotSharp(?:Editor)?)\.dll$') { continue }
-        $relative = [System.IO.Path]::GetRelativePath($buildPath, $file.FullName)
+        $relative = $file.FullName.Substring($buildPath.TrimEnd([char[]]'\/').Length + 1)
         $destination = Join-Path $staging $relative
         [System.IO.Directory]::CreateDirectory((Split-Path $destination -Parent)) | Out-Null
         Copy-Item -LiteralPath $file.FullName -Destination $destination
@@ -49,7 +50,7 @@ try {
             if ($allowed -notcontains $file.Extension.ToLowerInvariant() -or ($file.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
                 throw "素材目录含不支持的文件或链接：$($file.Name)"
             }
-            $relative = [System.IO.Path]::GetRelativePath($assetRoot, $file.FullName)
+            $relative = $file.FullName.Substring($assetRoot.TrimEnd([char[]]'\/').Length + 1)
             $destination = Join-Path $staging $relative
             if ((Test-Path -LiteralPath $destination) -or $relative -eq 'manifest.json') { throw "素材路径冲突：$relative" }
             [System.IO.Directory]::CreateDirectory((Split-Path $destination -Parent)) | Out-Null
